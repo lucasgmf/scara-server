@@ -3,3 +3,5 @@ result*
 
 # Misc
 .direnv
+
+rp2040src/build/
