@@ -18,7 +18,7 @@
 #define WIFI_FAILURE 1 << 1
 #define TCP_SUCCESS 1 << 0
 #define TCP_FAILURE 1 << 1
-#define MAX_FAILURES 10
+#define MAX_FAILURES 50
 
 /** GLOBALS **/
 // event group to contain status information
@@ -107,8 +107,8 @@ esp_err_t connect_wifi() {
   wifi_config_t wifi_config = {
       .sta =
           {
-              .ssid = "eduroam",
-              .password = "",
+              .ssid = "lucas",
+              .password = "olalucas",
               .threshold.authmode = WIFI_AUTH_WPA2_PSK,
               .pmf_cfg = {.capable = true, .required = false},
           },
@@ -160,18 +160,20 @@ esp_err_t connect_tcp_server(void) {
   char readBuffer[1024] = {0};
 
   serverInfo.sin_family = AF_INET;
-  serverInfo.sin_addr.s_addr = 0x0100007f;
-  serverInfo.sin_port = htons(12345);
+  // serverInfo.sin_addr.s_addr = 0x0100007f;
+  serverInfo.sin_addr.s_addr = inet_addr("192.168.17.26");
+  serverInfo.sin_port = htons(42424);
 
   int sock = socket(AF_INET, SOCK_STREAM, 0);
   if (sock < 0) {
     ESP_LOGE(TAG, "Failed to create a socket..?");
     return TCP_FAILURE;
-  }
+  } else
+    ESP_LOGI(TAG, "Socket created successully");
 
   if (connect(sock, (struct sockaddr *)&serverInfo, sizeof(serverInfo)) != 0) {
-    ESP_LOGE(TAG, "Failed to connect to %s!",
-             inet_ntoa(serverInfo.sin_addr.s_addr));
+    ESP_LOGE(TAG, "Failed to connect to %s! Error: %d",
+             inet_ntoa(serverInfo.sin_addr), errno);
     close(sock);
     return TCP_FAILURE;
   }
