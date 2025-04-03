@@ -155,43 +155,76 @@ esp_err_t connect_wifi() {
 }
 
 // connect to the server and return the result
-esp_err_t connect_tcp_server(void) {
-  struct sockaddr_in serverInfo = {0};
-  char readBuffer[1024] = {0};
+esp_err_t start_tcp_server(void) {
+  int server_sock, client_sock;
+  struct sockaddr_in server_addr, client_addr;
+  socklen_t client_len = sizeof(client_addr);
+  char buffer[1024];
 
-  serverInfo.sin_family = AF_INET;
-  // serverInfo.sin_addr.s_addr = 0x0100007f;
-  serverInfo.sin_addr.s_addr = inet_addr("192.168.17.26");
-  serverInfo.sin_port = htons(42424);
-
-  int sock = socket(AF_INET, SOCK_STREAM, 0);
-  if (sock < 0) {
-    ESP_LOGE(TAG, "Failed to create a socket..?");
-    return TCP_FAILURE;
-  } else
-    ESP_LOGI(TAG, "Socket created successully");
-
-  if (connect(sock, (struct sockaddr *)&serverInfo, sizeof(serverInfo)) != 0) {
-    ESP_LOGE(TAG, "Failed to connect to %s! Error: %d",
-             inet_ntoa(serverInfo.sin_addr), errno);
-    close(sock);
+  // Create a TCP socket
+  server_sock = socket(AF_INET, SOCK_STREAM, 0);
+  if (server_sock < 0) {
+    ESP_LOGE(TAG, "Failed to create server socket.");
     return TCP_FAILURE;
   }
 
-  ESP_LOGI(TAG, "Connected to TCP server.");
-  bzero(readBuffer, sizeof(readBuffer));
-  int r = read(sock, readBuffer, sizeof(readBuffer) - 1);
-  for (int i = 0; i < r; i++) {
-    putchar(readBuffer[i]);
+  ESP_LOGI(TAG, "Socket created successfully.");
+
+  // Configure server address structure
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_addr.s_addr = htonl(INADDR_ANY); // Listen on any IP
+  server_addr.sin_port = htons(42424);             // Port number
+
+  // Bind the socket
+  if (bind(server_sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) <
+      0) {
+    ESP_LOGE(TAG, "Failed to bind socket.");
+    close(server_sock);
+    return TCP_FAILURE;
   }
 
-  if (strcmp(readBuffer, "HELLO") == 0) {
-    ESP_LOGI(TAG, "WE DID IT!");
+  ESP_LOGI(TAG, "Socket bound successfully.");
+
+  // Start listening for connections
+  if (listen(server_sock, 5) < 0) {
+    ESP_LOGE(TAG, "Failed to listen on socket.");
+    close(server_sock);
+    return TCP_FAILURE;
   }
 
+  ESP_LOGI(TAG, "Listening for incoming connections...");
+
+  while (1) {
+    // Accept an incoming connection
+    client_sock =
+        accept(server_sock, (struct sockaddr *)&client_addr, &client_len);
+    if (client_sock < 0) {
+      ESP_LOGE(TAG, "Failed to accept client connection.");
+      close(server_sock);
+      return TCP_FAILURE;
+    }
+
+    ESP_LOGI(TAG, "Client connected from %s", inet_ntoa(client_addr.sin_addr));
+
+    // Read data from the client
+    while (1) {
+      memset(buffer, 0, sizeof(buffer));
+      int bytes_received = recv(client_sock, buffer, sizeof(buffer) - 1, 0);
+      if (bytes_received <= 0) {
+        ESP_LOGI(TAG, "Client disconnected.");
+        close(client_sock);
+        break;
+      }
+
+      // Print received data
+      buffer[bytes_received] = '\0';
+      ESP_LOGI(TAG, "Received: %s", buffer);
+    }
+  }
+
+  close(server_sock);
   return TCP_SUCCESS;
 }
-
 void app_main(void) {
   esp_err_t status = WIFI_FAILURE;
 
@@ -212,7 +245,7 @@ void app_main(void) {
   }
 
   // connect using sockets!
-  status = connect_tcp_server();
+  status = start_tcp_server();
   if (TCP_SUCCESS != status) {
     ESP_LOGI(TAG, "Failed to connect to remote server, dying...");
     return;
