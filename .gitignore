@@ -4,5 +4,5 @@ result*
 # Misc
 .direnv
 
-blink-led/build/
-blink-led/.cache/
+wifi-connection/build/
+wifi-connection/.cache/
