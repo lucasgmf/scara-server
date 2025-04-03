@@ -47,10 +47,9 @@
       devShells.default = pkgs.mkShell {
         inherit buildInputs nativeBuildInputs;
 
-        # You can use NIX_CFLAGS_COMPILE to set the default CFLAGS for the shell
-        #NIX_CFLAGS_COMPILE = "-g";
-        # You can use NIX_LDFLAGS to set the default linker flags for the shell
-        #NIX_LDFLAGS = "-L${lib.getLib zstd}/lib -lzstd";
+        shellHook = ''
+          . ~/esp-idf/export.sh
+        '';
       };
 
       # Pinned gcc: remain on gcc10 even after `nix flake update`
