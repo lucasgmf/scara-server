@@ -37,7 +37,7 @@ NIX_CC='/nix/store/gj9lra51hwhxnhz05jqk5lh03wipamv0-gcc-wrapper-14-20241116'
 export NIX_CC
 NIX_CC_WRAPPER_TARGET_HOST_x86_64_unknown_linux_gnu='1'
 export NIX_CC_WRAPPER_TARGET_HOST_x86_64_unknown_linux_gnu
-NIX_CFLAGS_COMPILE=' -frandom-seed=im969g6ndb'
+NIX_CFLAGS_COMPILE=' -frandom-seed=z615fhzszl'
 export NIX_CFLAGS_COMPILE
 NIX_ENFORCE_NO_NATIVE='1'
 export NIX_ENFORCE_NO_NATIVE
@@ -188,7 +188,8 @@ declare -a propagatedTargetDepFiles=('propagated-target-target-deps' )
 setOutputFlags=''
 shell='/nix/store/ki4if6b0w5bqv8dc5lrjp8xm7wjy9dlf-bash-5.2p37/bin/bash'
 export shell
-shellHook=''
+shellHook='. ~/esp-idf/export.sh
+'
 export shellHook
 stdenv='/nix/store/md93ycspqdq3arrv9ms0m4c33jssizgg-stdenv-linux'
 export stdenv
