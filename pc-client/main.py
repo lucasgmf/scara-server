@@ -2,7 +2,7 @@ import socket
 import time
 import random
 
-ESP32_IP = "192.168.17.148"  # Replace with your ESP32's IP
+ESP32_IP = "192.168.101.148"  # Replace with your ESP32's IP
 ESP32_PORT = 42424
 
 def send_random_numbers():
