@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Send Numbers</title>
+    <style>
+        .slider-container {
+            margin-bottom: 20px;
+        }
+    </style>
+    <script>
+        function updateValue(sliderId, outputId) {
+            document.getElementById(outputId).innerText = document.getElementById(sliderId).value;
+        }
+
+        function sendValues(event) {
+            event.preventDefault(); // Prevent form from reloading page
+
+            let formData = new FormData(document.getElementById("sliderForm"));
+            
+            fetch("/", {
+                method: "POST",
+                body: formData
+            })
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById("status").innerText = "Values sent!";
+                setTimeout(() => document.getElementById("status").innerText = "", 2000); // Clear message after 2 sec
+            })
+            .catch(error => console.error("Error:", error));
+        }
+    </script>
+</head>
+<body>
+    <h2>Adjust Sliders to Send Values</h2>
+    <form id="sliderForm" onsubmit="sendValues(event)">
+        <div class="slider-container">
+            <label>Value 1: <span id="val1">0</span></label>
+            <input type="range" name="num1" id="slider1" min="-180" max="180" value="0" oninput="updateValue('slider1', 'val1')">
+        </div>
+        <div class="slider-container">
+            <label>Value 2: <span id="val2">0</span></label>
+            <input type="range" name="num2" id="slider2" min="-180" max="180" value="0" oninput="updateValue('slider2', 'val2')">
+        </div>
+        <div class="slider-container">
+            <label>Value 3: <span id="val3">0</span></label>
+            <input type="range" name="num3" id="slider3" min="-180" max="180" value="0" oninput="updateValue('slider3', 'val3')">
+        </div>
+        <div class="slider-container">
+            <label>Value 4: <span id="val4">0</span></label>
+            <input type="range" name="num4" id="slider4" min="-180" max="180" value="0" oninput="updateValue('slider4', 'val4')">
+        </div>
+        <div class="slider-container">
+            <label>Value 5: <span id="val5">0</span></label>
+            <input type="range" name="num5" id="slider5" min="-180" max="180" value="0" oninput="updateValue('slider5', 'val5')">
+        </div>
+        <button type="submit">Send</button>
+    </form>
+    <p id="status"></p>
+</body>
+</html>
