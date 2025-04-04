@@ -4,5 +4,5 @@ result*
 # Misc
 .direnv
 
-wifi-connection/build/
-wifi-connection/.cache/
+esp32-server/build/
+esp32-server/.cache/
