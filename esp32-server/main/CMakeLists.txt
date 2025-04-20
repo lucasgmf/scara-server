@@ -1,2 +1,2 @@
-idf_component_register(SRCS "esp32-server.c"
-                    INCLUDE_DIRS ".")
+idf_component_register(SRCS "motor.c" "main.c"
+                    INCLUDE_DIRS "../include")
