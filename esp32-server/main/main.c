@@ -1,4 +1,7 @@
 #include "motor.h"
-#include <stdio.h>
 
-void app_main(void) { motor_setup(); }
+void app_main(void) {
+  /* led_test(); */
+  /* led_test_2(); */
+  motor_test();
+}

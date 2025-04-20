@@ -6,8 +6,17 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#define BLINK_LED 2
+#define BLINK_LED 4
 
-void motor_setup(void);
+#define GPIOXDIR 16
+#define GPIOYDIR 27
+#define GPIOZDIR 14
+#define GPIOXSTP 26
+#define GPIOYSTP 25
+#define GPIOZSTP 17
+
+void led_test(void);
+void motor_test(void);
+void led_test_2(void);
 
 #endif // MOTOR_H
