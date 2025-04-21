@@ -42,7 +42,6 @@ void motor_test(int gpiodir, int gpiostp) {
       gpio_set_level(gpiostp, 0);
       esp_rom_delay_us(500);
     }
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
 
     ESP_LOGI("Motor", "Changing motor direction to %d\n", 0);
     gpio_set_level(gpiodir, 0);
