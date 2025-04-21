@@ -1,13 +1,15 @@
-IDF = idf.py
-PORT = /dev/ttyACM0
-
-.PHONY: build flash buildflash
+.PHONY: build flash monitor all
 
 build:
-	$(IDF) build
+	idf.py build
 
 flash:
-	$(IDF) -p $(PORT) flash
+	idf.py -p /dev/ttyUSB0 flash
 
-buildflash: build flash
+monitor:
+	idf.py monitor
 
+all: build flash monitor
+
+# Default target when just running 'make'
+.DEFAULT_GOAL := all

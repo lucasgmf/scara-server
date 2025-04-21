@@ -26,7 +26,6 @@
         version = "0.0.1";
         src = ./.;
         buildInputs = with pkgs; [
-          python312Packages.flask
         ];
         nativeBuildInputs = with pkgs; [
           # add build dependencies here
