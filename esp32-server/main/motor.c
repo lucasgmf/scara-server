@@ -27,26 +27,45 @@ void led_test_2(void) {
   }
 }
 
-void motor_test(void) {
-  gpio_reset_pin(GPIOXDIR);
-  gpio_reset_pin(GPIOXSTP);
-  gpio_set_direction(GPIOXDIR, GPIO_MODE_OUTPUT);
-  gpio_set_direction(GPIOXSTP, GPIO_MODE_OUTPUT);
+void motor_test(int gpiodir, int gpiostp) {
+  gpio_reset_pin(gpiodir);
+  gpio_reset_pin(gpiostp);
+  gpio_set_direction(gpiodir, GPIO_MODE_OUTPUT);
+  gpio_set_direction(gpiostp, GPIO_MODE_OUTPUT);
 
-  int direction = false;
   while (1) {
-    direction = !direction;
-    ESP_LOGI("Motor", "Changing motor direction to %d\n", direction);
-
-    gpio_set_level(GPIOXDIR, direction);
-
-    ESP_LOGI("Motor", "Starting cycles\n");
-    for (int pulses = 0; pulses < 800; pulses++) {
-      gpio_set_level(GPIOXSTP, direction);
+    ESP_LOGI("Motor", "Changing motor direction to %d\n", 1);
+    gpio_set_level(gpiodir, 1);
+    for (int pulses = 0; pulses < 1000; pulses++) {
+      gpio_set_level(gpiostp, 1);
       esp_rom_delay_us(500);
-      gpio_set_level(GPIOXSTP, direction);
+      gpio_set_level(gpiostp, 0);
       esp_rom_delay_us(500);
     }
     vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    ESP_LOGI("Motor", "Changing motor direction to %d\n", 0);
+    gpio_set_level(gpiodir, 0);
+    for (int pulses = 0; pulses < 1000; pulses++) {
+      gpio_set_level(gpiostp, 1);
+      esp_rom_delay_us(500);
+      gpio_set_level(gpiostp, 0);
+      esp_rom_delay_us(500);
+    }
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
+}
+
+void driver_calibration(int gpiodir, int gpiostp) {
+  gpio_reset_pin(gpiodir);
+  gpio_reset_pin(gpiostp);
+  gpio_set_direction(gpiodir, GPIO_MODE_OUTPUT);
+  gpio_set_direction(gpiostp, GPIO_MODE_OUTPUT);
+
+  while (1) {
+    ESP_LOGI("Motor", "You can now calibrate!\n", 0);
+    gpio_set_level(gpiodir, 1);
+    gpio_set_level(gpiostp, 1);
+    vTaskDelay(10000000000 / portTICK_PERIOD_MS);
   }
 }

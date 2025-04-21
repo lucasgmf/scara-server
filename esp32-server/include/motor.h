@@ -16,7 +16,8 @@
 #define GPIOZSTP 17
 
 void led_test(void);
-void motor_test(void);
+void motor_test(int gpiodir, int gpiostp);
 void led_test_2(void);
+void driver_calibration(int gpiodir, int gpiostp);
 
 #endif // MOTOR_H
