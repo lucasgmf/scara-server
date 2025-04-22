@@ -4,5 +4,5 @@ result*
 # Misc
 .direnv
 
-esp32-server/build/
-esp32-server/.cache/
+esp32-scara-robot/build/
+esp32-scara-robot/.cache/
