@@ -1,5 +1,17 @@
 #include "motor.h"
 
+void initialize_motors(void) {
+  motor motor_x, motor_y, motor_z, motor_a;
+  motor_x.gpiostp = GPIOXDIR;
+  motor_x.gpiostp = GPIOXSTP;
+  motor_y.gpiodir = GPIOYDIR;
+  motor_y.gpiostp = GPIOYSTP;
+  motor_z.gpiodir = GPIOZDIR;
+  motor_z.gpiostp = GPIOZSTP;
+  motor_a.gpiodir = GPIOADIR;
+  motor_a.gpiostp = GPIOASTP;
+}
+
 void led_test(void) {
   gpio_reset_pin(BLINK_LED);
   gpio_set_direction(BLINK_LED, GPIO_MODE_OUTPUT);
@@ -68,3 +80,5 @@ void driver_calibration(int gpiodir, int gpiostp) {
     vTaskDelay(10000000000 / portTICK_PERIOD_MS);
   }
 }
+
+void calibrate_motor_pos() {}
