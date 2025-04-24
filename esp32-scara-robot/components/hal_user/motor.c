@@ -1,5 +1,23 @@
 #include "motor.h"
 
+void motor_initialization(motor_t *motor_n) {
+  if (motor_n == NULL) {
+    ESP_LOGW("motor_initialization", "Pointer is null\n");
+    return;
+  }
+  int gpiodir = motor_n->gpio_dir;
+  int gpiostp = motor_n->gpio_stp;
+
+  gpio_reset_pin(gpiodir);
+  gpio_reset_pin(gpiostp);
+  gpio_set_direction(gpiodir, GPIO_MODE_OUTPUT);
+  gpio_set_direction(gpiostp, GPIO_MODE_OUTPUT);
+
+  ESP_LOGW("motor_initialization", "Successfully initializated motor %d",
+           motor_n->id);
+  return;
+}
+
 void motor_test(motor_t *motor_n) {
   if (motor_n == NULL) {
     ESP_LOGW("motor_test", "Pointer is null\n");
@@ -71,6 +89,11 @@ void driver_calibration(motor_t *motor_n) {
   }
 }
 
-void calibrate_motor_pos() {}
-
-void motor_update(){}
+void motor_update(motor_t *motor_n) {
+  if (motor_n == NULL) {
+    ESP_LOGW("motor_update", "Null pointer at motor_update\n");
+    return;
+  }
+  ESP_LOGI("motor_update", "Finished motor_update to motor %d", motor_n->id);
+  return;
+}
