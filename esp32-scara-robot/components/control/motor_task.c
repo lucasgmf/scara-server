@@ -5,7 +5,7 @@
 #include "freertos/task.h"
 #include "motor.h"
 
-#define MOTOR_TASK_PERIOD_MS 1000
+#define MOTOR_TASK_PERIOD_MS 2000
 
 static const char *TAG = "MotorTask";
 
@@ -15,8 +15,9 @@ void motor_task(void *arg) {
   TickType_t last_wake_time = xTaskGetTickCount();
 
   while (true) {
-    /* motor_update(motor); */
-    ESP_LOGI(TAG, "Hello from motor %d", motor->id);
+    ESP_LOGI(TAG, "Hello from function with motor %d", motor->id);
+    motor_update(motor);
+    ESP_LOGI(TAG, "Goodbye from function with motor %d", motor->id);
     vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(MOTOR_TASK_PERIOD_MS));
   }
 }
