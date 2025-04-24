@@ -39,14 +39,20 @@ void led_test_2(void) {
   }
 }
 
-void motor_test(int gpiodir, int gpiostp) {
+void motor_test(motor *motor_n) {
+  if (motor_n == NULL) {
+    ESP_LOGW("motor_test", "Pointer is null\n");
+    return;
+  }
+  int gpiodir = motor_n->gpiodir;
+  int gpiostp = motor_n->gpiostp;
+
   gpio_reset_pin(gpiodir);
   gpio_reset_pin(gpiostp);
   gpio_set_direction(gpiodir, GPIO_MODE_OUTPUT);
   gpio_set_direction(gpiostp, GPIO_MODE_OUTPUT);
 
   while (1) {
-    ESP_LOGI("Motor", "Changing motor direction to %d\n", 1);
     gpio_set_level(gpiodir, 1);
     for (int pulses = 0; pulses < 1000; pulses++) {
       gpio_set_level(gpiostp, 1);
@@ -55,7 +61,6 @@ void motor_test(int gpiodir, int gpiostp) {
       esp_rom_delay_us(500);
     }
 
-    ESP_LOGI("Motor", "Changing motor direction to %d\n", 0);
     gpio_set_level(gpiodir, 0);
     for (int pulses = 0; pulses < 1000; pulses++) {
       gpio_set_level(gpiostp, 1);
@@ -63,11 +68,35 @@ void motor_test(int gpiodir, int gpiostp) {
       gpio_set_level(gpiostp, 0);
       esp_rom_delay_us(500);
     }
+
+    gpio_set_level(gpiodir, 1);
+    for (int pulses = 0; pulses < 1000; pulses++) {
+      gpio_set_level(gpiostp, 1);
+      esp_rom_delay_us(600);
+      gpio_set_level(gpiostp, 0);
+      esp_rom_delay_us(600);
+    }
+
+    gpio_set_level(gpiodir, 0);
+    for (int pulses = 0; pulses < 1000; pulses++) {
+      gpio_set_level(gpiostp, 1);
+      esp_rom_delay_us(700);
+      gpio_set_level(gpiostp, 0);
+      esp_rom_delay_us(700);
+    }
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
 
-void driver_calibration(int gpiodir, int gpiostp) {
+void driver_calibration(motor *motor_n) {
+  if (motor_n == NULL) {
+    ESP_LOGW("driver_calibration", "Pointer is null\n");
+    return;
+  }
+
+  int gpiodir = motor_n->gpiodir;
+  int gpiostp = motor_n->gpiostp;
+
   gpio_reset_pin(gpiodir);
   gpio_reset_pin(gpiostp);
   gpio_set_direction(gpiodir, GPIO_MODE_OUTPUT);

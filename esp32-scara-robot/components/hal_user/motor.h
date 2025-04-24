@@ -23,8 +23,10 @@ typedef struct {
 } motor_encoder;
 
 typedef struct {
-  bool gpiodir;
-  bool gpiostp;
+  bool gpiodir_val;
+  bool gpiostp_val;
+  int gpiostp;
+  int gpiodir;
   int angle_deg; // TODO: Maybe float?
   motor_encoder *encoder;
 } motor;
@@ -47,8 +49,8 @@ typedef struct {
 } scara;
 
 void led_test(void);
-void motor_test(int gpiodir, int gpiostp);
 void led_test_2(void);
-void driver_calibration(int gpiodir, int gpiostp);
+void motor_test(motor *motor_n);
+void driver_calibration(motor *motor_n);
 
 #endif // MOTOR_H
