@@ -4,5 +4,6 @@ result*
 # Misc
 .direnv
 
+# build files
 esp32-scara-robot/build/
 esp32-scara-robot/.cache/
