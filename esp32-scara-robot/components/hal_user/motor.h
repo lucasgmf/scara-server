@@ -31,7 +31,7 @@ typedef struct {
   gpio_num_t gpio_dir;
   int step_count;
   int target_steps;
-  int speed;
+  int speed; // TODO: does this makes sense?
   int period_ms;
 } motor_t;
 
@@ -56,5 +56,7 @@ void led_test(void);
 void led_test_2(void);
 void motor_test(motor_t *motor_n);
 void driver_calibration(motor_t *motor_n);
+void motor_update(motor_t *motor_n);
+void motor_initialization(motor_t *motor_n);
 
 #endif // MOTOR_H
