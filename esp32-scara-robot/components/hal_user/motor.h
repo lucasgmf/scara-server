@@ -6,7 +6,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#define BLINK_LED 4
+#define MOTOR_X 1
+#define MOTOR_Y 2
+#define MOTOR_Z 3
+#define MOTOR_A 4
 
 #define GPIOXDIR 16
 #define GPIOYDIR 27
@@ -23,13 +26,14 @@ typedef struct {
 } motor_encoder;
 
 typedef struct {
-  bool gpiodir_val;
-  bool gpiostp_val;
-  int gpiostp;
-  int gpiodir;
-  int angle_deg; // TODO: Maybe float?
-  motor_encoder *encoder;
-} motor;
+  int id;
+  gpio_num_t gpio_stp;
+  gpio_num_t gpio_dir;
+  int step_count;
+  int target_steps;
+  int speed;
+  int period_ms;
+} motor_t;
 
 typedef struct {
   int gpio;
@@ -37,7 +41,7 @@ typedef struct {
 } micro_switch;
 
 typedef struct {
-  motor *motor_claw;
+  motor_t *motor_claw;
   micro_switch *switch_claw;
 } claw;
 
@@ -50,7 +54,7 @@ typedef struct {
 
 void led_test(void);
 void led_test_2(void);
-void motor_test(motor *motor_n);
-void driver_calibration(motor *motor_n);
+void motor_test(motor_t *motor_n);
+void driver_calibration(motor_t *motor_n);
 
 #endif // MOTOR_H
