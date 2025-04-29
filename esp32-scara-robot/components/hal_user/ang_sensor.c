@@ -40,9 +40,27 @@ uint16_t read_as5600_angle() {
     printf("AS5600 read failed: %s\n", esp_err_to_name(ret));
     return 0xFFFF;
   }
-
-  uint16_t angle = ((angle_data[0] << 8) | angle_data[1]) & 0x0FFF;
-  ESP_LOGI("Main", "Reading... Value read: %u", angle);
-
   return ((angle_data[0] << 8) | angle_data[1]) & 0x0FFF; // 12-bit mask
+}
+
+uint16_t read_calibrated_angle(uint16_t offset) {
+  uint16_t raw = read_as5600_angle();
+  if (raw == 0xFFFF)
+    return 0xFFFF;
+
+  int32_t adjusted = raw - offset * 4096 / 360;
+  if (adjusted < 0)
+    adjusted += 4096;
+  return adjusted;
+}
+
+#define MAX_ENCODER_VAL 4096
+
+// Calibration: known encoder value at 0 degrees
+#define ENCODER_AT_0_DEG 4025
+#define DEGREES_PER_COUNT (180.0f / 6487.0f)
+
+float encoder_to_degrees(int32_t unwrapped_val) {
+  int32_t relative_position = unwrapped_val - ENCODER_AT_0_DEG;
+  return relative_position * DEGREES_PER_COUNT;
 }
