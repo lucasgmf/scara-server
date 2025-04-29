@@ -16,6 +16,7 @@ motor_t motor_y = {
 };
 
 void app_main(void) {
+
   // Initialization of components!
   motor_initialization(&motor_x);
   motor_initialization(&motor_y);
