@@ -6,24 +6,20 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+// motor ids
 #define MOTOR_X 1
 #define MOTOR_Y 2
 #define MOTOR_Z 3
-#define MOTOR_A 4
+/* #define MOTOR_A 4 */
 
-#define GPIOXDIR 16
-#define GPIOYDIR 27
-#define GPIOZDIR 14
-#define GPIOADIR 50 // WARN - Find GPIO number
-#define GPIOXSTP 26
-#define GPIOYSTP 25
-#define GPIOZSTP 17
-#define GPIOASTP 50 // WARN - Find GPIO number
-
-typedef struct {
-  int gpio;
-  int value; // TODO: idk?
-} motor_encoder;
+#define GPIOXDIR GPIO_NUM_16
+#define GPIOYDIR GPIO_NUM_27
+#define GPIOZDIR GPIO_NUM_14
+/* #define GPIOADIR 50 // WARN - Find GPIO number */
+#define GPIOXSTP GPIO_NUM_26
+#define GPIOYSTP GPIO_NUM_25
+#define GPIOZSTP GPIO_NUM_17
+/* #define GPIOASTP 50 // WARN - Find GPIO number */
 
 typedef struct {
   int id;
@@ -37,28 +33,12 @@ typedef struct {
 } motor_t;
 
 typedef struct {
-  int gpio;
-  bool value;
-} micro_switch;
+  motor_t **motors;
+  size_t count;
+} motor_array_t;
 
-typedef struct {
-  motor_t *motor_claw;
-  micro_switch *switch_claw;
-} claw;
-
-typedef struct { // TODO: Update this struct
-  int gpio;
-} colision_detector;
-
-typedef struct {
-} scara;
-
-void led_test(void);
-void led_test_2(void);
-void motor_test(motor_t *motor_n);
-void driver_calibration(motor_t *motor_n);
-void motor_update(motor_t *motor_n);
-void motor_initialization(motor_t *motor_n);
+void driver_calib(motor_t *motor_n);
+void motor_init_all();
 void motor_move(motor_t *motor_n, bool direction, int iteractions,
                 int delay_us);
 
