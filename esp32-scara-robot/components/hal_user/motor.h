@@ -33,6 +33,7 @@ typedef struct {
   int target_steps;
   int speed; // TODO: does this makes sense?
   int period_ms;
+  int delay_us;
 } motor_t;
 
 typedef struct {
@@ -58,5 +59,7 @@ void motor_test(motor_t *motor_n);
 void driver_calibration(motor_t *motor_n);
 void motor_update(motor_t *motor_n);
 void motor_initialization(motor_t *motor_n);
+void motor_move(motor_t *motor_n, bool direction, int iteractions,
+                int delay_us);
 
 #endif // MOTOR_H
