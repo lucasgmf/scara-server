@@ -5,23 +5,47 @@
 #include "freertos/task.h"
 #include "motor.h"
 
-#define MOTOR_TASK_PERIOD_MS 2000
+#define MOTOR_TASK_PERIOD_MS 1
 
 static const char *TAG = "MotorTask";
 
 // TODO: watchdog, stats, or timing metrics
 void motor_task(void *arg) {
   motor_t *motor = (motor_t *)arg;
-  TickType_t last_wake_time = xTaskGetTickCount();
+  if (motor == NULL) {
+    ESP_LOGE("motor_task", "parameter motor is null, aborting.");
+    vTaskDelete(NULL);
+    return;
+  }
+  /* TickType_t last_wake_time = xTaskGetTickCount(); */
 
   while (true) {
-    ESP_LOGI(TAG, "Hello from function with motor %d", motor->id);
+    ESP_LOGI("motor_task", "inside while, motor %d\n", motor->id);
     motor_update(motor);
-    ESP_LOGI(TAG, "Goodbye from function with motor %d", motor->id);
-    vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(MOTOR_TASK_PERIOD_MS));
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    /* vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(MOTOR_TASK_PERIOD_MS)); */
   }
 }
 
+void motor_task_start(motor_t *motor, const char *task_name,
+                      UBaseType_t priority, BaseType_t core_id) {
+  if (motor == NULL || task_name == NULL) {
+    ESP_LOGE(TAG, "Cannot start motor task: invalid arguments");
+    return;
+  }
+
+  BaseType_t result = xTaskCreatePinnedToCore(motor_task, task_name,
+                                              2048, // Stack size in words
+                                              (void *)motor, priority,
+                                              NULL, // No handle needed for now
+                                              core_id);
+
+  if (result != pdPASS) {
+    ESP_LOGE(TAG, "Failed to create task %s", task_name);
+  } else {
+    ESP_LOGI(TAG, "Motor task %s started on core %d", task_name, core_id);
+  }
+}
 //
 // --- 1. Update motors --- motor_test();
 
