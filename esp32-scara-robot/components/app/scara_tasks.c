@@ -1,12 +1,11 @@
-#include "mag_enc_task.h"
+#include "scara_tasks.h"
 
 #define UPDATE_ENCODER_TASK_PERIOD_MS 10
-static const char *TAG = "Encoder task";
 
 void update_encoder_val_task(void *arg) {
   mag_encoder *encoder_n = (mag_encoder *)arg;
   if (encoder_n == NULL) {
-    ESP_LOGE(TAG, "parameter is null, aborting.");
+    ESP_LOGE("update_encoder_val_task", "parameter is null, aborting.");
     vTaskDelete(NULL);
     return;
   }
@@ -17,7 +16,7 @@ void update_encoder_val_task(void *arg) {
   static int last_val = -1;
 
   while (true) {
-    reading = get_as5600_reading();
+    reading = get_as5600_reading(0, 0); // WARN: Brokenn!
     check_encoder_cal(encoder_n, reading);
 
     if (last_val == -1) {
