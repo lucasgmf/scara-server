@@ -1,4 +1,4 @@
-#include "ang_sensor.h"
+#include "mag_encoder.h"
 
 static i2c_master_bus_handle_t bus_handle;
 static i2c_master_dev_handle_t as5600_dev_handle;
@@ -26,7 +26,7 @@ void init_i2c_master() {
   return;
 }
 
-uint16_t read_as5600_angle() {
+uint16_t get_as5600_reading() {
   uint8_t reg_addr = AS5600_REG_ANGLE_MSB;
   uint8_t angle_data[2] = {0};
 
@@ -43,24 +43,38 @@ uint16_t read_as5600_angle() {
   return ((angle_data[0] << 8) | angle_data[1]) & 0x0FFF; // 12-bit mask
 }
 
-uint16_t read_calibrated_angle(uint16_t offset) {
-  uint16_t raw = read_as5600_angle();
-  if (raw == 0xFFFF)
-    return 0xFFFF;
+int get_encoder_val_deg(mag_encoder *encoder_n) {
+  int32_t adjusted_val = encoder_n->raw_val - encoder_n->offset;
+  int angle_deg = (int)(adjusted_val * DEGREES_PER_COUNT);
 
-  int32_t adjusted = raw - offset * 4096 / 360;
-  if (adjusted < 0)
-    adjusted += 4096;
-  return adjusted;
+  angle_deg = ((angle_deg % 360) + 360) % 360;
+  return angle_deg;
 }
 
-#define MAX_ENCODER_VAL 4096
+// TODO: this should be a task ...
+void update_encoder_val(mag_encoder *encoder_n) {
+  uint16_t new_reading = get_as5600_reading();
+  static int last_val = -1;
 
-// Calibration: known encoder value at 0 degrees
-#define ENCODER_AT_0_DEG 4025
-#define DEGREES_PER_COUNT (180.0f / 6487.0f)
+  if (last_val == -1) {
+    last_val = new_reading;
+    return;
+  }
 
-float encoder_to_degrees(int32_t unwrapped_val) {
-  int32_t relative_position = unwrapped_val - ENCODER_AT_0_DEG;
-  return relative_position * DEGREES_PER_COUNT;
+  int delta = new_reading - last_val;
+  if (delta > MAX_ENCODER_VAL / 2) {
+    delta -= MAX_ENCODER_VAL;
+  } else if (delta < -MAX_ENCODER_VAL / 2) {
+    delta += MAX_ENCODER_VAL;
+  }
+
+  encoder_n->raw_val += delta;
+  last_val = new_reading;
+  return;
+}
+
+void calibrate_encoder(uint32_t current_val, mag_encoder *encoder_n) {
+  ESP_LOGI("calibrate_encoder", "Calibration has been successful");
+  encoder_n->offset = current_val;
+  return;
 }
