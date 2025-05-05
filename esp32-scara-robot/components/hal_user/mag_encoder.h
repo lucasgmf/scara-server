@@ -4,7 +4,8 @@
 #include "driver/i2c_master.h"
 #include "esp_log.h"
 
-#define I2C_MASTER_NUM I2C_NUM_0
+#include "micro_switch.h" // calibrations ...
+
 #define I2C_MASTER_SCL_IO GPIO_NUM_22
 #define I2C_MASTER_SDA_IO GPIO_NUM_21
 #define I2C_MASTER_FREQ_HZ 100000 // 100 ~ 400 kHz
@@ -20,15 +21,17 @@
 #define DEGREES_PER_COUNT (360.0f / MAX_ENCODER_VAL) // change this
 
 typedef struct {
+  int id;
+  bool is_calibrated;
   uint16_t raw_val;
   uint32_t offset;
-  bool is_calibrated;
-  int id;
+  switch_t *cal_switch;
 } mag_encoder;
 
 void init_encoder_i2c_master();
 uint16_t get_as5600_reading();
 int get_encoder_val_deg(mag_encoder *encoder_n);
-void calibrate_encoder(uint32_t current_val, mag_encoder *sensor);
+void calibrate_encoder(uint32_t current_val, mag_encoder *encoder_n);
+void check_encoder_cal(mag_encoder *encoder_n, uint16_t reading);
 
 #endif // MAG_ENCODER_H

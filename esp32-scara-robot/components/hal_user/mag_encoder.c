@@ -51,30 +51,20 @@ int get_encoder_val_deg(mag_encoder *encoder_n) {
   return angle_deg;
 }
 
-// TODO: this should be a task ...
-void update_encoder_val(mag_encoder *encoder_n) {
-  uint16_t new_reading = get_as5600_reading();
-  static int last_val = -1;
-
-  if (last_val == -1) {
-    last_val = new_reading;
-    return;
-  }
-
-  int delta = new_reading - last_val;
-  if (delta > MAX_ENCODER_VAL / 2) {
-    delta -= MAX_ENCODER_VAL;
-  } else if (delta < -MAX_ENCODER_VAL / 2) {
-    delta += MAX_ENCODER_VAL;
-  }
-
-  encoder_n->raw_val += delta;
-  last_val = new_reading;
-  return;
-}
-
 void calibrate_encoder(uint32_t current_val, mag_encoder *encoder_n) {
   ESP_LOGI("calibrate_encoder", "Calibration has been successful");
   encoder_n->offset = current_val;
   return;
+}
+
+void check_encoder_cal(mag_encoder *encoder_n, uint16_t reading) {
+  if (encoder_n->is_calibrated == false) {
+    ESP_LOGW("check_encoder_cal", "Encoder with id %d is not calibrated!",
+             encoder_n->id);
+    // try calibration
+    if (encoder_n->cal_switch->value == true) {
+      ESP_LOGI("check_encoder_cal", "calibrating ...");
+      calibrate_encoder(reading, encoder_n);
+    }
+  }
 }
