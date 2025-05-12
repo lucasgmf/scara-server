@@ -1,6 +1,9 @@
 #ifndef SCARA_CONTROLLER_H
 #define SCARA_CONTROLLER_H
 
+// app/scara_tasks
+#include "scara_tasks.h"
+
 #include "driver/i2c_master.h"
 #include "esp_log.h"
 

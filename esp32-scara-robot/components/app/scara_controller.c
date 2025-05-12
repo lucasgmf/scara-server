@@ -74,29 +74,26 @@ void init_scara() {
   init_motor_dir(&motor_x);
   init_motor_stp(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, motor_x.gpio_stp);
 
+  init_motor_dir(&motor_y);
+  init_motor_stp(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_A, motor_y.gpio_stp);
+
+  init_motor_dir(&motor_z);
+  init_motor_stp(MCPWM_UNIT_0, MCPWM_TIMER_2, MCPWM_OPR_A, motor_z.gpio_stp);
+
   ESP_LOGI("init_scara", "init_scara ended without errors!");
   vTaskDelay(1000 / portTICK_PERIOD_MS);
 
   return;
 }
 void loop_scara() {
+  xTaskCreate(move_test_motor_x, "motor_x_task", 2048, (void *)&motor_x, 10,
+              NULL);
+  xTaskCreate(move_test_motor_y, "motor_y_task", 2048, (void *)&motor_y, 10,
+              NULL);
+  xTaskCreate(move_test_motor_z, "motor_z_task", 2048, (void *)&motor_z, 10,
+              NULL);
 
   while (true) {
-    apply_motor_pwm(MCPWM_UNIT_0, MCPWM_TIMER_0, 50.0, 500);
-
-    ESP_LOGI("loop_scara", "Changing direction to 1");
-    gpio_set_level(motor_x.gpio_dir, 1);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    ESP_LOGI("loop_scara", "Changing direction to 0");
-    gpio_set_level(motor_x.gpio_dir, 0);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-    apply_motor_pwm(MCPWM_UNIT_0, MCPWM_TIMER_0, 50.0, 600);
-    ESP_LOGI("loop_scara", "Changing direction to 1");
-    gpio_set_level(motor_x.gpio_dir, 1);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    ESP_LOGI("loop_scara", "Changing direction to 0");
-    gpio_set_level(motor_x.gpio_dir, 0);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
   return;
