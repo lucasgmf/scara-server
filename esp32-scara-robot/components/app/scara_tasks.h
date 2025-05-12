@@ -13,5 +13,8 @@
 #include "encoder_d.h"
 
 void update_encoder_val_task(void *arg);
+void move_test_motor_x(void *arg);
+void move_test_motor_y(void *arg);
+void move_test_motor_z(void *arg);
 
 #endif // SCARA_TASKS_H
