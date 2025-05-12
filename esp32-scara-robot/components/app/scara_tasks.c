@@ -3,7 +3,7 @@
 #define UPDATE_ENCODER_TASK_PERIOD_MS 10
 #define MOVE_TEST_MOTOR_PERIOD_MS 10
 
-void move_test_motor_x(void *arg) {
+void move_test_motor(void *arg) {
   motor_t *motor_n = (motor_t *)arg;
   if (motor_n == NULL) {
     ESP_LOGE("move_test_motor", "parameter is null, aborting.");
@@ -11,81 +11,36 @@ void move_test_motor_x(void *arg) {
     return;
   }
   TickType_t last_wake_time = xTaskGetTickCount();
+  int direction = 0;
 
   while (true) {
-    apply_motor_pwm(MCPWM_UNIT_0, MCPWM_TIMER_0, 50.0, 500);
+    apply_motor_pwm(motor_n->mcpwm_unit, motor_n->mcpwm_timer, 50.0,
+                    motor_n->freq_hz * 0.8);
+    direction = !direction;
+    gpio_set_level(motor_n->gpio_dir, direction);
+    ESP_LOGI("loop_scara", "Changing direction of motor %d to %d", motor_n->id,
+             direction);
+    vTaskDelay(motor_n->move_ms / portTICK_PERIOD_MS);
 
-    ESP_LOGI("loop_scara", "Changing direction of motor %d to 1", motor_n->id);
-    gpio_set_level(motor_n->gpio_dir, 1);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    ESP_LOGI("loop_scara", "Changing direction of motor %d to 0", motor_n->id);
-    gpio_set_level(motor_n->gpio_dir, 0);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    direction = !direction;
+    gpio_set_level(motor_n->gpio_dir, direction);
+    ESP_LOGI("loop_scara", "Changing direction of motor %d to %d", motor_n->id,
+             direction);
+    vTaskDelay(motor_n->move_ms / portTICK_PERIOD_MS);
 
-    ESP_LOGI("loop_scara", "Changing direction of motor %d to 1", motor_n->id);
-    gpio_set_level(motor_n->gpio_dir, 1);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    ESP_LOGI("loop_scara", "Changing direction of motor %d to 0", motor_n->id);
-    gpio_set_level(motor_n->gpio_dir, 0);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(MOVE_TEST_MOTOR_PERIOD_MS));
-  }
-}
+    apply_motor_pwm(motor_n->mcpwm_unit, motor_n->mcpwm_timer, 50.0,
+                    motor_n->freq_hz * 1);
+    direction = !direction;
+    gpio_set_level(motor_n->gpio_dir, direction);
+    ESP_LOGI("loop_scara", "Changing direction of motor %d to %d", motor_n->id,
+             direction);
+    vTaskDelay(motor_n->move_ms / portTICK_PERIOD_MS);
 
-void move_test_motor_y(void *arg) {
-  motor_t *motor_n = (motor_t *)arg;
-  if (motor_n == NULL) {
-    ESP_LOGE("move_test_motor", "parameter is null, aborting.");
-    vTaskDelete(NULL);
-    return;
-  }
-  TickType_t last_wake_time = xTaskGetTickCount();
-
-  while (true) {
-    apply_motor_pwm(MCPWM_UNIT_0, MCPWM_TIMER_1, 50.0, 500);
-
-    ESP_LOGI("loop_scara", "Changing direction of motor %d to 1", motor_n->id);
-    gpio_set_level(motor_n->gpio_dir, 1);
-    vTaskDelay(500 / portTICK_PERIOD_MS);
-    ESP_LOGI("loop_scara", "Changing direction of motor %d to 0", motor_n->id);
-    gpio_set_level(motor_n->gpio_dir, 0);
-    vTaskDelay(500 / portTICK_PERIOD_MS);
-
-    ESP_LOGI("loop_scara", "Changing direction of motor %d to 1", motor_n->id);
-    gpio_set_level(motor_n->gpio_dir, 1);
-    vTaskDelay(500 / portTICK_PERIOD_MS);
-    ESP_LOGI("loop_scara", "Changing direction of motor %d to 0", motor_n->id);
-    gpio_set_level(motor_n->gpio_dir, 0);
-    vTaskDelay(500 / portTICK_PERIOD_MS);
-    vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(MOVE_TEST_MOTOR_PERIOD_MS));
-  }
-}
-
-void move_test_motor_z(void *arg) {
-  motor_t *motor_n = (motor_t *)arg;
-  if (motor_n == NULL) {
-    ESP_LOGE("move_test_motor", "parameter is null, aborting.");
-    vTaskDelete(NULL);
-    return;
-  }
-  TickType_t last_wake_time = xTaskGetTickCount();
-
-  while (true) {
-    apply_motor_pwm(MCPWM_UNIT_0, MCPWM_TIMER_2, 50.0, 700);
-    ESP_LOGI("loop_scara", "Changing direction of motor %d to 1", motor_n->id);
-    gpio_set_level(motor_n->gpio_dir, 1);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
-    ESP_LOGI("loop_scara", "Changing direction of motor %d to 0", motor_n->id);
-    gpio_set_level(motor_n->gpio_dir, 0);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
-
-    ESP_LOGI("loop_scara", "Changing direction of motor %d to 1", motor_n->id);
-    gpio_set_level(motor_n->gpio_dir, 1);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
-    ESP_LOGI("loop_scara", "Changing direction of motor %d to 0", motor_n->id);
-    gpio_set_level(motor_n->gpio_dir, 0);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
-
+    direction = !direction;
+    gpio_set_level(motor_n->gpio_dir, direction);
+    ESP_LOGI("loop_scara", "Changing direction of motor %d to %d", motor_n->id,
+             direction);
+    vTaskDelay(motor_n->move_ms / portTICK_PERIOD_MS);
     vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(MOVE_TEST_MOTOR_PERIOD_MS));
   }
 }
