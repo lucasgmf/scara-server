@@ -13,6 +13,9 @@
 #define I2C_MASTER_RX_BUF_DISABLE 0
 #define TEST_I2C_PORT 0
 
+//drivers/motor_d
+#include "motor_d.h"
+
 // hal_dir/encoder
 #define AS5600_I2C_ADDR 0x36
 #define AS5600_REG_ANGLE_MSB 0x0C
@@ -26,6 +29,7 @@
 
 // hal_dir/motor
 #include "motor.h"
+
 // motor ids
 #define MOTOR_X 1
 #define MOTOR_Y 2

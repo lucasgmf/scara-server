@@ -62,8 +62,6 @@ motor_t motor_z = {
 #define PWM_FREQUENCY 500   // 500 hz
 #define PWM_DUTY_CYCLE 50.0 // 50% duty cycle
 
-#include "driver/mcpwm.h"
-
 void init_scara() {
   /* init_switch(&switch_1, &switch_1_io_conf); */
   /* init_i2c_master(&i2c_mst_config, &dev_cfg, &bus_handle,
@@ -73,42 +71,19 @@ void init_scara() {
   /* init_motor(&motor_z); */
   // Initialize MCPWM unit 0, timer 0, operator A
 
-  gpio_reset_pin(motor_x.gpio_dir);
-  gpio_set_direction(motor_x.gpio_dir, GPIO_MODE_OUTPUT);
+  init_motor_dir(&motor_x);
+  init_motor_stp(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, motor_x.gpio_stp);
 
-  mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, motor_x.gpio_stp);
+  ESP_LOGI("init_scara", "init_scara ended without errors!");
+  vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-  // Configure the MCPWM parameters
-  mcpwm_config_t pwm_config = {
-      .frequency = PWM_FREQUENCY,       // 100 kHz
-      .cmpr_a = PWM_DUTY_CYCLE,         // Duty cycle of PWMxA
-      .cmpr_b = 0.0,                    // PWMxB not used
-      .counter_mode = MCPWM_UP_COUNTER, // Count up
-      .duty_mode = MCPWM_DUTY_MODE_0,   // Active HIGH
-  };
-  mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);
-
-  ESP_LOGI("MCPWM", "Frequency of %d PWM started on GPIO %d", PWM_FREQUENCY,
-           motor_x.gpio_stp);
   return;
 }
-
-void change_pwm_frequency(uint32_t new_freq_hz, float current_duty_percent) {
-  mcpwm_config_t pwm_config = {
-      .frequency = new_freq_hz,
-      .cmpr_a = current_duty_percent,
-      .cmpr_b = 0.0,
-      .counter_mode = MCPWM_UP_COUNTER,
-      .duty_mode = MCPWM_DUTY_MODE_0,
-  };
-
-  // This will briefly stop and restart the PWM output
-  mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);
-}
-
 void loop_scara() {
+
   while (true) {
-    change_pwm_frequency(500, 50.0);
+    apply_motor_pwm(MCPWM_UNIT_0, MCPWM_TIMER_0, 50.0, 500);
+
     ESP_LOGI("loop_scara", "Changing direction to 1");
     gpio_set_level(motor_x.gpio_dir, 1);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
@@ -116,39 +91,7 @@ void loop_scara() {
     gpio_set_level(motor_x.gpio_dir, 0);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-    change_pwm_frequency(600, 50.0);
-    ESP_LOGI("loop_scara", "Changing direction to 1");
-    gpio_set_level(motor_x.gpio_dir, 1);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    ESP_LOGI("loop_scara", "Changing direction to 0");
-    gpio_set_level(motor_x.gpio_dir, 0);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-    change_pwm_frequency(700, 50.0);
-    ESP_LOGI("loop_scara", "Changing direction to 1");
-    gpio_set_level(motor_x.gpio_dir, 1);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    ESP_LOGI("loop_scara", "Changing direction to 0");
-    gpio_set_level(motor_x.gpio_dir, 0);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-    change_pwm_frequency(800, 50.0);
-    ESP_LOGI("loop_scara", "Changing direction to 1");
-    gpio_set_level(motor_x.gpio_dir, 1);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    ESP_LOGI("loop_scara", "Changing direction to 0");
-    gpio_set_level(motor_x.gpio_dir, 0);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-    change_pwm_frequency(900, 50.0);
-    ESP_LOGI("loop_scara", "Changing direction to 1");
-    gpio_set_level(motor_x.gpio_dir, 1);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    ESP_LOGI("loop_scara", "Changing direction to 0");
-    gpio_set_level(motor_x.gpio_dir, 0);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-    change_pwm_frequency(1000, 50.0);
+    apply_motor_pwm(MCPWM_UNIT_0, MCPWM_TIMER_0, 50.0, 600);
     ESP_LOGI("loop_scara", "Changing direction to 1");
     gpio_set_level(motor_x.gpio_dir, 1);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
