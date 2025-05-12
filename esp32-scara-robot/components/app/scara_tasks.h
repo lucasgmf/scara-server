@@ -6,6 +6,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "motor.h"
+#include "motor_d.h"
+
 #include "encoder.h"
 #include "encoder_d.h"
 

@@ -1,6 +1,22 @@
 #include "scara_tasks.h"
 
 #define UPDATE_ENCODER_TASK_PERIOD_MS 10
+#define MOVE_TEST_MOTOR_PERIOD_MS 10
+
+void move_test_motor(void *arg) {
+  motor_t *motor_n = (motor_t *)arg;
+  if (motor_n == NULL) {
+    ESP_LOGE("move_test_motor", "parameter is null, aborting.");
+    vTaskDelete(NULL);
+    return;
+  }
+  TickType_t last_wake_time = xTaskGetTickCount();
+
+  while (true) {
+
+    vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(MOVE_TEST_MOTOR_PERIOD_MS));
+  }
+}
 
 void update_encoder_val_task(void *arg) {
   mag_encoder *encoder_n = (mag_encoder *)arg;
