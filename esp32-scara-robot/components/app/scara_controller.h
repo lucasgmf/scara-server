@@ -50,4 +50,5 @@
 
 void init_scara();
 void loop_scara();
+
 #endif // SCARA_CONTROLLER_H

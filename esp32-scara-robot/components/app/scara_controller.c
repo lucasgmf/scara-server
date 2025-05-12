@@ -42,43 +42,44 @@ motor_t motor_x = {
     .id = MOTOR_X,
     .gpio_dir = GPIOXDIR,
     .gpio_stp = GPIOXSTP,
-    .delay_us = 600,
+    .mcpwm_unit = MCPWM_UNIT_0,
+    .mcpwm_timer = MCPWM_TIMER_0,
+    .mcpwm_opr = MCPWM_OPR_A,
+    .move_ms = 2000,
+    .freq_hz = 700,
 };
 
 motor_t motor_y = {
     .id = MOTOR_Y,
     .gpio_dir = GPIOYDIR,
     .gpio_stp = GPIOYSTP,
-    .delay_us = 600,
+    .mcpwm_unit = MCPWM_UNIT_0,
+    .mcpwm_timer = MCPWM_TIMER_1,
+    .mcpwm_opr = MCPWM_OPR_A,
+    .move_ms = 1000,
+    .freq_hz = 700,
 };
 
 motor_t motor_z = {
     .id = MOTOR_Z,
     .gpio_dir = GPIOZDIR,
     .gpio_stp = GPIOZSTP,
-    .delay_us = 500,
+    .mcpwm_unit = MCPWM_UNIT_0,
+    .mcpwm_timer = MCPWM_TIMER_2,
+    .mcpwm_opr = MCPWM_OPR_A,
+    .move_ms = 1500,
+    .freq_hz = 1000,
 };
 
-#define PWM_FREQUENCY 500   // 500 hz
-#define PWM_DUTY_CYCLE 50.0 // 50% duty cycle
-
 void init_scara() {
-  /* init_switch(&switch_1, &switch_1_io_conf); */
-  /* init_i2c_master(&i2c_mst_config, &dev_cfg, &bus_handle,
-   * &as5600_dev_handle); */
-  /* init_motor(&motor_x); */
-  /* init_motor(&motor_y); */
-  /* init_motor(&motor_z); */
-  // Initialize MCPWM unit 0, timer 0, operator A
-
   init_motor_dir(&motor_x);
-  init_motor_stp(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, motor_x.gpio_stp);
+  init_motor_stp(&motor_x);
 
   init_motor_dir(&motor_y);
-  init_motor_stp(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_A, motor_y.gpio_stp);
+  init_motor_stp(&motor_y);
 
-  init_motor_dir(&motor_z);
-  init_motor_stp(MCPWM_UNIT_0, MCPWM_TIMER_2, MCPWM_OPR_A, motor_z.gpio_stp);
+  /* init_motor_dir(&motor_z); */
+  /* init_motor_stp(&motor_z); */
 
   ESP_LOGI("init_scara", "init_scara ended without errors!");
   vTaskDelay(1000 / portTICK_PERIOD_MS);
@@ -86,11 +87,9 @@ void init_scara() {
   return;
 }
 void loop_scara() {
-  xTaskCreate(move_test_motor_x, "motor_x_task", 2048, (void *)&motor_x, 10,
+  xTaskCreate(move_test_motor, "motor_x_task", 2048, (void *)&motor_x, 10,
               NULL);
-  xTaskCreate(move_test_motor_y, "motor_y_task", 2048, (void *)&motor_y, 10,
-              NULL);
-  xTaskCreate(move_test_motor_z, "motor_z_task", 2048, (void *)&motor_z, 10,
+  xTaskCreate(move_test_motor, "motor_y_task", 2048, (void *)&motor_y, 10,
               NULL);
 
   while (true) {
