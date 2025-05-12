@@ -59,7 +59,7 @@ void update_encoder_val_task(void *arg) {
   static int last_val = -1;
 
   while (true) {
-    reading = get_as5600_reading(0, 0); // WARN: Brokenn!
+    reading = get_as5600_reading(encoder_n, 0x0C); // WARN: Brokenn!
     check_encoder_cal(encoder_n, reading);
 
     if (last_val == -1) {

@@ -72,6 +72,17 @@ motor_t motor_z = {
 };
 
 void init_scara() {
+
+  i2c_configuration_t i2c_configuration = {
+      .bus_handle_t = bus_handle,
+      .as5600_dev_handle_t = as5600_dev_handle,
+      .i2c_mst_config_t = &i2c_mst_config,
+      .dev_cfg_t = &dev_cfg,
+  };
+  encoder_1.i2c_configuration = &i2c_configuration;
+
+  init_i2c_master(&i2c_configuration);
+
   init_motor_dir(&motor_x);
   init_motor_stp(&motor_x);
 
@@ -91,7 +102,6 @@ void loop_scara() {
               NULL);
   xTaskCreate(move_test_motor, "motor_y_task", 2048, (void *)&motor_y, 10,
               NULL);
-
   while (true) {
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
