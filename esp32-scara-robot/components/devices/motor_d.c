@@ -18,3 +18,16 @@ void motor_move(motor_t *motor_n, bool direction, int iteractions,
   }
   return;
 }
+
+void apply_motor_pwm(mcpwm_unit_t unit, mcpwm_timer_t timer, float duty_percent,
+                     uint32_t freq_hz) {
+  mcpwm_config_t config = {
+      .frequency = freq_hz,
+      .cmpr_a = duty_percent,
+      .cmpr_b = duty_percent,
+      .counter_mode = MCPWM_UP_COUNTER,
+      .duty_mode = MCPWM_DUTY_MODE_0,
+  };
+
+  mcpwm_init(unit, timer, &config);
+}
