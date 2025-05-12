@@ -41,4 +41,6 @@
 #define GPIOZSTP GPIO_NUM_17
 /* #define GPIOASTP 50 // WARN - Find GPIO number */
 
+void init_scara();
+void loop_scara();
 #endif // SCARA_CONTROLLER_H
