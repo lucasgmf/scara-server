@@ -1,0 +1,24 @@
+components/
+├── app/
+│   ├── scara_controller.c     ← System init + coordination
+│   └── scara_tasks.c          ← Task creation (e.g., control loop)
+│
+├── control/
+│   ├── pid.c                  ← Clean, reusable PID module
+│   ├── kalman_filter.c        ← State estimator
+│   └── control_loop.c         ← Control loop task(s), owns robot state
+│
+├── devices/
+│   ├── mag_encoder.c          ← sensor/actuator drivers, Mid-level, device specific modules
+│   └── motor_d.c
+│
+├── drivers/
+│   └── i2c_bus.c          
+│
+├── hal/
+│   ├── encoder.c       ← low-level GPIO/SPI/PWM
+│   ├── switch_h.c
+│   └── motor.c
+│
+└── network/
+    └── wifi_manager

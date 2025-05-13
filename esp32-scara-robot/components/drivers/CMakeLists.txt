@@ -1,5 +1,3 @@
-idf_component_register(SRCS "motor.c" "micro-switch.c" "ang-sensor.c"
+idf_component_register(SRCS "i2c_bus.c"
                        INCLUDE_DIRS "."
                        REQUIRES driver)
-
-
