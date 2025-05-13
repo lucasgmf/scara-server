@@ -13,23 +13,6 @@ gpio_config_t switch_1_io_conf = {
     .intr_type = GPIO_INTR_DISABLE // No interrupts for now
 };
 
-static i2c_master_bus_handle_t bus_handle;
-static i2c_master_dev_handle_t as5600_dev_handle;
-
-i2c_master_bus_config_t i2c_mst_config = {
-    .clk_source = I2C_CLK_SRC_DEFAULT,
-    .i2c_port = TEST_I2C_PORT, // I2C_NUM_0
-    .scl_io_num = I2C_MASTER_SCL_IO,
-    .sda_io_num = I2C_MASTER_SDA_IO,
-    .glitch_ignore_cnt = 7,
-    .flags.enable_internal_pullup = true,
-};
-
-i2c_device_config_t dev_cfg = {
-    .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-    .device_address = AS5600_I2C_ADDR,
-    .scl_speed_hz = 100000,
-};
 
 mag_encoder encoder_1 = {
     .raw_val = 0,
@@ -72,17 +55,6 @@ motor_t motor_z = {
 };
 
 void init_scara() {
-
-  i2c_configuration_t i2c_configuration = {
-      .bus_handle_t = bus_handle,
-      .as5600_dev_handle_t = as5600_dev_handle,
-      .i2c_mst_config_t = &i2c_mst_config,
-      .dev_cfg_t = &dev_cfg,
-  };
-  encoder_1.i2c_configuration = &i2c_configuration;
-
-  init_i2c_master(&i2c_configuration);
-
   init_motor_dir(&motor_x);
   init_motor_stp(&motor_x);
 
