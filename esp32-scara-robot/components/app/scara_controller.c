@@ -1,81 +1,57 @@
 #include "scara_controller.h"
 
-switch_t switch_1 = {
-    .value = false,
-    .gpio_port = GPIO_NUM_4,
-};
+static const char *TAG = "scara_controller";
 
-gpio_config_t switch_1_io_conf = {
-    /* .pin_bit_mask = (1ULL << switch_1->gpio_port), */
-    .mode = GPIO_MODE_INPUT,
-    .pull_up_en = GPIO_PULLUP_ENABLE,
-    .pull_down_en = GPIO_PULLDOWN_DISABLE,
-    .intr_type = GPIO_INTR_DISABLE // No interrupts for now
-};
-
-
-mag_encoder encoder_1 = {
-    .raw_val = 0,
-    .offset = 0,
-    .is_calibrated = false,
-    .cal_switch = &switch_1,
-};
-
-motor_t motor_x = {
-    .id = MOTOR_X,
-    .gpio_dir = GPIOXDIR,
+motor_t motor1 = {
+    .id = 0,
     .gpio_stp = GPIOXSTP,
-    .mcpwm_unit = MCPWM_UNIT_0,
-    .mcpwm_timer = MCPWM_TIMER_0,
-    .mcpwm_opr = MCPWM_OPR_A,
-    .move_ms = 2000,
-    .freq_hz = 700,
+    .gpio_dir = GPIO_NUM_27, // optional
+    .step_count = 0,
+    .mcpwm_unit = 0,
+    .mcpwm_timer = 0,
+    .mcpwm_opr = 0,
+    .move_ms = 0,
+    .current_freq_hz = 200,
+    .target_freq_hz = 0,
+    .speed_hz = 1000,
 };
 
-motor_t motor_y = {
-    .id = MOTOR_Y,
-    .gpio_dir = GPIOYDIR,
+motor_t motor2 = {
+    .id = 1,
     .gpio_stp = GPIOYSTP,
-    .mcpwm_unit = MCPWM_UNIT_0,
-    .mcpwm_timer = MCPWM_TIMER_1,
-    .mcpwm_opr = MCPWM_OPR_A,
-    .move_ms = 1000,
-    .freq_hz = 700,
-};
-
-motor_t motor_z = {
-    .id = MOTOR_Z,
-    .gpio_dir = GPIOZDIR,
-    .gpio_stp = GPIOZSTP,
-    .mcpwm_unit = MCPWM_UNIT_0,
-    .mcpwm_timer = MCPWM_TIMER_2,
-    .mcpwm_opr = MCPWM_OPR_A,
-    .move_ms = 1500,
-    .freq_hz = 1000,
+    .gpio_dir = GPIO_NUM_33, // optional
+    .step_count = 0,
+    .mcpwm_unit = 1,
+    .mcpwm_timer = 0,
+    .mcpwm_opr = 0,
+    .move_ms = 0,
+    .current_freq_hz = 200,
+    .target_freq_hz = 0,
+    .speed_hz = 1500,
 };
 
 void init_scara() {
-  init_motor_dir(&motor_x);
-  init_motor_stp(&motor_x);
+  motor_create_pwm(&motor1);
 
-  init_motor_dir(&motor_y);
-  init_motor_stp(&motor_y);
+  xTaskCreatePinnedToCore(task_update_motor_pwm, "task_motor_pwm_1", 2048,
+                          (void *)&motor1, 5, NULL, 0);
 
-  /* init_motor_dir(&motor_z); */
-  /* init_motor_stp(&motor_z); */
-
-  ESP_LOGI("init_scara", "init_scara ended without errors!");
-  vTaskDelay(1000 / portTICK_PERIOD_MS);
-
+  ESP_LOGI(TAG, "Changing freq to 1000 hz");
   return;
 }
+
 void loop_scara() {
-  xTaskCreate(move_test_motor, "motor_x_task", 2048, (void *)&motor_x, 10,
-              NULL);
-  xTaskCreate(move_test_motor, "motor_y_task", 2048, (void *)&motor_y, 10,
-              NULL);
-  while (true) {
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+  while (1) {
+    ESP_LOGI(TAG, "Changing freq to 1000 hz");
+    motor1.target_freq_hz = 1000;
+    vTaskDelay(2500 / portTICK_PERIOD_MS);
+
+    ESP_LOGI(TAG, "Changing freq to 0 hz");
+    motor1.target_freq_hz = 0;
+    vTaskDelay(2500 / portTICK_PERIOD_MS);
+    ESP_LOGI(TAG, "step_count: %d", motor1.step_count);
   }
+
+  /* vTaskDelay(1000 / portTICK_PERIOD_MS); */
   return;
 }
