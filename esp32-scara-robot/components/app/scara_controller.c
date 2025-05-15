@@ -57,27 +57,37 @@ motor_t motor_z = {
 };
 
 void init_scara() {
+
+  init_motor_dir(&motor_x);
+  init_motor_stp(&motor_x);
+
   init_motor_dir(&motor_y);
   init_motor_stp(&motor_y);
 
-  /* init_motor_dir(&motor_z); */
-  /* init_motor_stp(&motor_z); */
-
+  init_motor_dir(&motor_z);
+  init_motor_stp(&motor_z);
   ESP_LOGI("init_scara", "init_scara ended without errors!");
-  vTaskDelay(1000 / portTICK_PERIOD_MS);
 
+  xTaskCreate(accel_test_motor, "accel_motor_x_task", 2048, (void *)&motor_x,
+              10, NULL);
   xTaskCreate(accel_test_motor, "accel_motor_y_task", 2048, (void *)&motor_y,
+              10, NULL);
+  xTaskCreate(accel_test_motor, "accel_motor_z_task", 2048, (void *)&motor_z,
               10, NULL);
   return;
 }
 void loop_scara() {
   while (true) {
     ESP_LOGI("loop_scara", "Changing freq to 800 hz");
+    motor_x.target_freq_hz = 1000;
     motor_y.target_freq_hz = 1000;
+    motor_z.target_freq_hz = 1000;
     vTaskDelay(5000 / portTICK_PERIOD_MS);
 
     ESP_LOGI("loop_scara", "Changing freq to 200 hz");
+    motor_x.target_freq_hz = 0;
     motor_y.target_freq_hz = 0;
+    motor_z.target_freq_hz = 0;
     vTaskDelay(5000 / portTICK_PERIOD_MS);
 
     /* vTaskDelay(1000 / portTICK_PERIOD_MS); */

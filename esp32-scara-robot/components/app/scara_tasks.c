@@ -35,9 +35,9 @@ void accel_test_motor(void *arg) {
 
     motor->current_freq_hz = current;
 
-    ESP_LOGI("accel_test_motor",
-             "Current freq: %.2f | Target freq: %d | dt_sec: %.6f | df: %.6f",
-             current, target, dt_sec, df);
+    /* ESP_LOGI("accel_test_motor", */
+    /*          "Current freq: %.2f | Target freq: %d | dt_sec: %.6f | df: %.6f", */
+    /*          current, target, dt_sec, df); */
 
     if ((int)current == 0) {
       mcpwm_stop(motor->mcpwm_unit, motor->mcpwm_timer);
@@ -47,9 +47,9 @@ void accel_test_motor(void *arg) {
     } else {
       bool should_reinit = false;
 
-      if (last_freq == 0.0 && current >= 10.0) {
+      if (last_freq == 0.0 && current >= 25.0) {
         should_reinit = true;
-      } else if (fabs(current - last_freq) > 10.0) {
+      } else if (fabs(current - last_freq) > 25.0) {
         should_reinit = true;
       }
 
