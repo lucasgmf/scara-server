@@ -2,10 +2,8 @@
 #define MOTOR_H
 
 #include "driver/gpio.h"
-#include "driver/mcpwm.h"
-#include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
+#include "driver/mcpwm_prelude.h"
+#include "esp_timer.h"
 
 typedef struct {
   int id;
@@ -18,10 +16,15 @@ typedef struct {
   int move_ms;
   float current_freq_hz;
   int target_freq_hz;
-  float acel;
+  float speed_hz; // Hz per second
+  mcpwm_timer_handle_t pwm_timer;
+  mcpwm_oper_handle_t pwm_oper;
+  mcpwm_cmpr_handle_t pwm_comparator;
+  mcpwm_gen_handle_t pwm_generator;
+  esp_timer_handle_t update_timer;
 } motor_t;
 
-void init_motor_dir(motor_t *motor_n);
-void init_motor_stp(motor_t *motor_n);
+void motor_create_pwm(motor_t *motor);
+void motor_set_frequency(motor_t *motor, int target_freq_hz);
 
 #endif // MOTOR_H
