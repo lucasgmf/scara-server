@@ -8,11 +8,25 @@
 #include "freertos/task.h"
 #include "math.h"
 
+static const char *TAG = "motor.c";
+
 #define PWM_RESOLUTION_HZ 1000000
+
+void motor_init_dir(motor_t *motor_n) {
+  if (motor_n == NULL) {
+    ESP_LOGW(TAG, "Pointer is null in motor_init_dir\n");
+    return;
+  }
+  gpio_reset_pin(motor_n->gpio_dir);
+  gpio_set_direction(motor_n->gpio_dir, GPIO_MODE_OUTPUT);
+  ESP_LOGW(TAG, "Successfully initializated motor %d", motor_n->id);
+
+  return;
+}
 
 void motor_create_pwm(motor_t *motor) {
   if (motor->current_freq_hz <= 0) {
-    ESP_LOGI("motor", "Skipping PWM creation: freq = 0");
+    ESP_LOGI(TAG, "Skipping PWM creation: freq = 0");
     return; // Don't create PWM if frequency is 0
   }
 

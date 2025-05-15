@@ -24,6 +24,7 @@ typedef struct {
   esp_timer_handle_t update_timer;
 } motor_t;
 
+void motor_init_dir(motor_t *motor_n);
 void motor_create_pwm(motor_t *motor);
 void motor_set_frequency(motor_t *motor, int target_freq_hz);
 void motor_delete_pwm(motor_t *motor);
