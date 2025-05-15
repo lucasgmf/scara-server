@@ -2,7 +2,7 @@
 
 motor_t motor1 = {
     .id = 0,
-    .gpio_stp = GPIO_NUM_26,
+    .gpio_stp = GPIOXSTP,
     .gpio_dir = GPIO_NUM_27, // optional
     .step_count = 0,
     .mcpwm_unit = 0,
@@ -16,7 +16,7 @@ motor_t motor1 = {
 
 motor_t motor2 = {
     .id = 1,
-    .gpio_stp = GPIO_NUM_25,
+    .gpio_stp = GPIOYSTP,
     .gpio_dir = GPIO_NUM_33, // optional
     .step_count = 0,
     .mcpwm_unit = 1,
@@ -28,11 +28,13 @@ motor_t motor2 = {
     .speed_hz = 1000,
 };
 
-void init_scara() { return; }
-void loop_scara() {
+void init_scara() {
   motor_create_pwm(&motor1);
   motor_create_pwm(&motor2);
+  return;
+}
 
+void loop_scara() {
   while (1) {
     ESP_LOGI("main", "Changing freq to 1000 hz");
     motor_set_frequency(&motor1, 1000);
