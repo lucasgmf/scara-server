@@ -1,47 +1,72 @@
 #include "scara_tasks.h"
+#include "esp_timer.h"
+#include "math.h"
 
 #define UPDATE_ENCODER_TASK_PERIOD_MS 10
 #define MOVE_TEST_MOTOR_PERIOD_MS 10
 
-void move_test_motor(void *arg) {
-  motor_t *motor_n = (motor_t *)arg;
-  if (motor_n == NULL) {
-    ESP_LOGE("move_test_motor", "parameter is null, aborting.");
-    vTaskDelete(NULL);
-    return;
-  }
-  TickType_t last_wake_time = xTaskGetTickCount();
-  int direction = 0;
+void accel_test_motor(void *arg) {
+  motor_t *motor = (motor_t *)arg;
+  const float duty_cycle = 50.0;
 
-  while (true) {
-    apply_motor_pwm(motor_n->mcpwm_unit, motor_n->mcpwm_timer, 50.0,
-                    motor_n->freq_hz * 0.8);
-    direction = !direction;
-    gpio_set_level(motor_n->gpio_dir, direction);
-    ESP_LOGI("loop_scara", "Changing direction of motor %d to %d", motor_n->id,
-             direction);
-    vTaskDelay(motor_n->move_ms / portTICK_PERIOD_MS);
+  float last_freq = 0.0;
+  int64_t last_time = esp_timer_get_time();
 
-    direction = !direction;
-    gpio_set_level(motor_n->gpio_dir, direction);
-    ESP_LOGI("loop_scara", "Changing direction of motor %d to %d", motor_n->id,
-             direction);
-    vTaskDelay(motor_n->move_ms / portTICK_PERIOD_MS);
+  while (1) {
+    int64_t now = esp_timer_get_time();
+    float dt_sec = (now - last_time) / 1e6;
+    last_time = now;
 
-    apply_motor_pwm(motor_n->mcpwm_unit, motor_n->mcpwm_timer, 50.0,
-                    motor_n->freq_hz * 1);
-    direction = !direction;
-    gpio_set_level(motor_n->gpio_dir, direction);
-    ESP_LOGI("loop_scara", "Changing direction of motor %d to %d", motor_n->id,
-             direction);
-    vTaskDelay(motor_n->move_ms / portTICK_PERIOD_MS);
+    int target = motor->target_freq_hz;
+    float current = motor->current_freq_hz;
+    float accel = (motor->acel > 0) ? motor->acel : 1;
 
-    direction = !direction;
-    gpio_set_level(motor_n->gpio_dir, direction);
-    ESP_LOGI("loop_scara", "Changing direction of motor %d to %d", motor_n->id,
-             direction);
-    vTaskDelay(motor_n->move_ms / portTICK_PERIOD_MS);
-    vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(MOVE_TEST_MOTOR_PERIOD_MS));
+    float df = accel * dt_sec;
+
+    if (current < target) {
+      current += df;
+      if (current > target)
+        current = target;
+    } else if (current > target) {
+      current -= df;
+      if (current < target)
+        current = target;
+    }
+
+    motor->current_freq_hz = current;
+
+    ESP_LOGI("accel_test_motor",
+             "Current freq: %.2f | Target freq: %d | dt_sec: %.6f | df: %.6f",
+             current, target, dt_sec, df);
+
+    if ((int)current == 0) {
+      mcpwm_stop(motor->mcpwm_unit, motor->mcpwm_timer);
+      mcpwm_set_signal_low(motor->mcpwm_unit, motor->mcpwm_timer,
+                           motor->mcpwm_opr);
+      last_freq = 0.0;
+    } else {
+      bool should_reinit = false;
+
+      if (last_freq == 0.0 && current >= 10.0) {
+        should_reinit = true;
+      } else if (fabs(current - last_freq) > 10.0) {
+        should_reinit = true;
+      }
+
+      if (should_reinit) {
+        mcpwm_config_t config = {
+            .frequency = (int)current,
+            .cmpr_a = duty_cycle,
+            .cmpr_b = duty_cycle,
+            .counter_mode = MCPWM_UP_COUNTER,
+            .duty_mode = MCPWM_DUTY_MODE_0,
+        };
+        mcpwm_init(motor->mcpwm_unit, motor->mcpwm_timer, &config);
+        last_freq = current;
+      }
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
 

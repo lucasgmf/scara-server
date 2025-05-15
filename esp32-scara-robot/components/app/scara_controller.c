@@ -13,7 +13,6 @@ gpio_config_t switch_1_io_conf = {
     .intr_type = GPIO_INTR_DISABLE // No interrupts for now
 };
 
-
 mag_encoder encoder_1 = {
     .raw_val = 0,
     .offset = 0,
@@ -28,8 +27,10 @@ motor_t motor_x = {
     .mcpwm_unit = MCPWM_UNIT_0,
     .mcpwm_timer = MCPWM_TIMER_0,
     .mcpwm_opr = MCPWM_OPR_A,
-    .move_ms = 2000,
-    .freq_hz = 700,
+    .move_ms = 1000,
+    .current_freq_hz = 0,
+    .target_freq_hz = 0,
+    .acel = 500,
 };
 
 motor_t motor_y = {
@@ -40,7 +41,9 @@ motor_t motor_y = {
     .mcpwm_timer = MCPWM_TIMER_1,
     .mcpwm_opr = MCPWM_OPR_A,
     .move_ms = 1000,
-    .freq_hz = 700,
+    .current_freq_hz = 0,
+    .target_freq_hz = 0,
+    .acel = 500,
 };
 
 motor_t motor_z = {
@@ -51,13 +54,9 @@ motor_t motor_z = {
     .mcpwm_timer = MCPWM_TIMER_2,
     .mcpwm_opr = MCPWM_OPR_A,
     .move_ms = 1500,
-    .freq_hz = 1000,
 };
 
 void init_scara() {
-  init_motor_dir(&motor_x);
-  init_motor_stp(&motor_x);
-
   init_motor_dir(&motor_y);
   init_motor_stp(&motor_y);
 
@@ -67,15 +66,21 @@ void init_scara() {
   ESP_LOGI("init_scara", "init_scara ended without errors!");
   vTaskDelay(1000 / portTICK_PERIOD_MS);
 
+  xTaskCreate(accel_test_motor, "accel_motor_y_task", 2048, (void *)&motor_y,
+              10, NULL);
   return;
 }
 void loop_scara() {
-  xTaskCreate(move_test_motor, "motor_x_task", 2048, (void *)&motor_x, 10,
-              NULL);
-  xTaskCreate(move_test_motor, "motor_y_task", 2048, (void *)&motor_y, 10,
-              NULL);
   while (true) {
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    ESP_LOGI("loop_scara", "Changing freq to 800 hz");
+    motor_y.target_freq_hz = 1000;
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
+
+    ESP_LOGI("loop_scara", "Changing freq to 200 hz");
+    motor_y.target_freq_hz = 0;
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
+
+    /* vTaskDelay(1000 / portTICK_PERIOD_MS); */
   }
   return;
 }

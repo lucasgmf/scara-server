@@ -12,7 +12,7 @@
 #include "encoder.h"
 #include "encoder_d.h"
 
-void update_encoder_val_task(void *arg);
+void accel_test_motor(void *arg);
 void move_test_motor(void *arg);
 
 #endif // SCARA_TASKS_H

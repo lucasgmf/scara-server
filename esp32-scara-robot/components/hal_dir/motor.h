@@ -16,7 +16,9 @@ typedef struct {
   int mcpwm_timer;
   int mcpwm_opr;
   int move_ms;
-  int freq_hz;
+  float current_freq_hz;
+  int target_freq_hz;
+  float acel;
 } motor_t;
 
 void init_motor_dir(motor_t *motor_n);

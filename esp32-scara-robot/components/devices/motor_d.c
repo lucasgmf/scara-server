@@ -19,15 +19,19 @@ void motor_move(motor_t *motor_n, bool direction, int iteractions,
   return;
 }
 
-void apply_motor_pwm(mcpwm_unit_t unit, mcpwm_timer_t timer, float duty_percent,
-                     uint32_t freq_hz) {
-  mcpwm_config_t config = {
-      .frequency = freq_hz,
-      .cmpr_a = duty_percent,
-      .cmpr_b = duty_percent,
-      .counter_mode = MCPWM_UP_COUNTER,
-      .duty_mode = MCPWM_DUTY_MODE_0,
-  };
-
-  mcpwm_init(unit, timer, &config);
+void check_motor_freq(motor_t *motor, int frequency_hz, float duty_cycle) {
+  if (frequency_hz > 0) {
+    mcpwm_config_t config = {
+        .frequency = frequency_hz,
+        .cmpr_a = duty_cycle,
+        .cmpr_b = duty_cycle,
+        .counter_mode = MCPWM_UP_COUNTER,
+        .duty_mode = MCPWM_DUTY_MODE_0,
+    };
+    mcpwm_init(motor->mcpwm_unit, motor->mcpwm_timer, &config);
+  } else {
+    mcpwm_stop(motor->mcpwm_unit, motor->mcpwm_timer);
+    mcpwm_set_signal_low(motor->mcpwm_unit, motor->mcpwm_timer,
+                         motor->mcpwm_opr);
+  }
 }
