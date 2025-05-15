@@ -12,7 +12,6 @@
 #include "encoder.h"
 #include "encoder_d.h"
 
-void accel_test_motor(void *arg);
-void move_test_motor(void *arg);
+void task_update_motor_pwm(void *arg);
 
 #endif // SCARA_TASKS_H

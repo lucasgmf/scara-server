@@ -26,5 +26,6 @@ typedef struct {
 
 void motor_create_pwm(motor_t *motor);
 void motor_set_frequency(motor_t *motor, int target_freq_hz);
+void motor_delete_pwm(motor_t *motor);
 
 #endif // MOTOR_H
