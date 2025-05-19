@@ -10,8 +10,20 @@
 // hal_dir/switch_h
 #include "switch_h.h"
 
+// drivers/i2c_bus
+#include "i2c_bus.h"
+#define I2C_MASTER_SCL_IO GPIO_NUM_22
+#define I2C_MASTER_SDA_IO GPIO_NUM_21
+#define I2C_MASTER_FREQ_HZ 100000 // 100 ~ 400 kHz
+#define I2C_MASTER_TX_BUF_DISABLE 0
+#define I2C_MASTER_RX_BUF_DISABLE 0
+#define TEST_I2C_PORT 0
+
 // hal_dir/encoder
 #include "encoder.h"
+#define AS5600_I2C_ADDR 0x36
+#define AS5600_REG_ANGLE_MSB 0x0C
+#define AS5600_REG_ANGLE_LSB 0x0D
 
 // hal_dir/motor
 #include "motor.h"

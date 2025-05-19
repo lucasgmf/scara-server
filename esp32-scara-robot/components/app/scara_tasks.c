@@ -50,3 +50,11 @@ void task_update_motor_pwm(void *arg) {
                     pdMS_TO_TICKS(TASK_UPDATE_MOTOR_PWM_PERIOD_MS));
   }
 }
+
+void encoder_task(void *param) {
+  encoder_conf *conf = (encoder_conf *)param;
+  while (1) {
+    read_as5600_angle(conf);
+    vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+}

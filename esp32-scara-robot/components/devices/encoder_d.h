@@ -7,4 +7,6 @@
 #include "encoder.h"
 #include "switch_h.h" // calibrations ...
 
+uint16_t read_as5600_angle(encoder_conf *conf);
+
 #endif // ENCODER_D_H
