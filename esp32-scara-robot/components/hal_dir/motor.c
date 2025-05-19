@@ -212,6 +212,10 @@ void motor_update_timer_cb(void *arg) {
 }
 
 void motor_set_frequency(motor_t *motor, int target_freq_hz) {
+  if (motor->target_freq_hz == target_freq_hz) {
+    return;
+  }
+
   motor->target_freq_hz = target_freq_hz;
 
   if (motor->update_timer == NULL) {
@@ -222,6 +226,8 @@ void motor_set_frequency(motor_t *motor, int target_freq_hz) {
     ESP_ERROR_CHECK(esp_timer_create(&timer_args, &motor->update_timer));
   }
 
-  ESP_ERROR_CHECK(
-      esp_timer_start_periodic(motor->update_timer, 100000)); // 100ms
+  if (!esp_timer_is_active(motor->update_timer)) {
+    ESP_ERROR_CHECK(
+        esp_timer_start_periodic(motor->update_timer, 100000)); // 100ms
+  }
 }

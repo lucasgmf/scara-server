@@ -14,5 +14,6 @@
 
 void task_update_motor_pwm(void *arg);
 void encoder_task(void *param);
+void motor_control_task(void *param);
 
 #endif // SCARA_TASKS_H
