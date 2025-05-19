@@ -1,11 +1,11 @@
 #include "scara_tasks.h"
-#include "esp_timer.h"
-#include "math.h"
-
 #include "driver/gpio.h"
+#include "encoder.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "math.h"
 
 static const char *TAG = "scara_tasks";
 
@@ -52,9 +52,10 @@ void task_update_motor_pwm(void *arg) {
 }
 
 void encoder_task(void *param) {
-  encoder_conf *conf = (encoder_conf *)param;
+  encoder_t *enc = (encoder_t *)param;
   while (1) {
-    read_as5600_angle(conf);
+    encoder_read_angle(enc);
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
+  return;
 }

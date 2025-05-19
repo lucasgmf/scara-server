@@ -1,23 +1,31 @@
 #include "encoder_d.h"
-#include "freertos/semphr.h"
 
-uint16_t read_as5600_angle(encoder_conf *conf) {
-  uint8_t angle_data[2];
-  esp_err_t ret;
+uint16_t encoder_read_angle(encoder_t *encoder) {
+  uint8_t reg = encoder->settings->angle_reg;
+  uint8_t data[2];
 
-  xSemaphoreTake(*conf->i2c_mutex, conf->i2c_timeout_ticks);
-
-  ret = i2c_master_transmit_receive(*conf->as5600_dev_handle, &conf->reg_addr,
-                                    1, angle_data, 2, -1);
-
-  xSemaphoreGive(*conf->i2c_mutex); // 🆕 Release mutex
-
-  if (ret != ESP_OK) {
-    ESP_LOGE(conf->label, "Read failed: %s", esp_err_to_name(ret));
+  if (xSemaphoreTake(*encoder->i2c_master->i2c_mutex,
+                     encoder->i2c_master->timeout_ticks) != pdTRUE) {
+    ESP_LOGE(encoder->label, "Mutex timeout");
     return 0xFFFF;
   }
 
-  uint16_t angle = ((angle_data[0] << 8) | angle_data[1]) & 0x0FFF;
-  ESP_LOGI(conf->label, "Angle: %u", angle);
-  return angle;
+  esp_err_t ret =
+      i2c_master_transmit_receive(*encoder->i2c_slave->dev_handle, &reg, 1,
+                                  data, 2, encoder->i2c_master->timeout_ticks);
+
+  xSemaphoreGive(*encoder->i2c_master->i2c_mutex);
+
+  if (ret != ESP_OK) {
+    ESP_LOGE(encoder->label, "Read error: %s", esp_err_to_name(ret));
+    return 0xFFFF;
+  }
+
+  uint16_t raw = ((data[0] << 8) | data[1]) & encoder->settings->angle_mask;
+  if (encoder->settings->reverse)
+    raw = encoder->settings->angle_mask - raw;
+  raw = (raw + encoder->settings->zero_offset) & encoder->settings->angle_mask;
+
+  ESP_LOGI(encoder->label, "Angle: %u", raw);
+  return raw;
 }

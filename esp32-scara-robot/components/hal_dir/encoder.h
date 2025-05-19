@@ -3,23 +3,28 @@
 
 #include "driver/i2c_master.h"
 #include "esp_log.h"
-
 #include "esp_task.h"
+#include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "i2c_bus.h"
+
 #include "switch_h.h"
 
 typedef struct {
-  i2c_master_bus_config_t *i2c_mst_config;
-  i2c_master_bus_handle_t *bus_handle;
-  i2c_device_config_t *dev_cfg;
-  i2c_master_dev_handle_t *as5600_dev_handle;
-  uint8_t reg_addr;
-  const char *label;
-  SemaphoreHandle_t *i2c_mutex;
-  TickType_t i2c_timeout_ticks;
-} encoder_conf;
+  uint8_t angle_reg;
+  uint16_t angle_mask;
+  bool reverse;
+  int16_t zero_offset;
+  // TODO: Add calibration params etc...
+} encoder_settings_t;
 
-void init_encoder(encoder_conf *conf);
+typedef struct {
+  encoder_settings_t *settings;
+  i2c_master_config_t *i2c_master;
+  i2c_slave_config_t *i2c_slave;
+  const char *label;
+} encoder_t;
+
+esp_err_t encoder_init(encoder_t *encoder);
 
 #endif // ENCODER_H
