@@ -13,5 +13,6 @@
 #include "encoder_d.h"
 
 void task_update_motor_pwm(void *arg);
+void encoder_task(void *param);
 
 #endif // SCARA_TASKS_H

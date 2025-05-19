@@ -1,11 +1,11 @@
 #include "scara_tasks.h"
-#include "esp_timer.h"
-#include "math.h"
-
 #include "driver/gpio.h"
+#include "encoder.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "math.h"
 
 static const char *TAG = "scara_tasks";
 
@@ -49,4 +49,13 @@ void task_update_motor_pwm(void *arg) {
     vTaskDelayUntil(&last_wake_time,
                     pdMS_TO_TICKS(TASK_UPDATE_MOTOR_PWM_PERIOD_MS));
   }
+}
+
+void encoder_task(void *param) {
+  encoder_t *enc = (encoder_t *)param;
+  while (1) {
+    encoder_read_angle(enc);
+    vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+  return;
 }
