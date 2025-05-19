@@ -76,8 +76,27 @@ motor_t motor_y = {
     .speed_hz = 800,
 };
 
+static pid_controller_t pid1 = {
+    .Kp = 1.2f,
+    .Ki = 0.01f * 0.1,
+    .Kd = 0.1f,
+    .output_limit = 500.0f, // Hz max
+};
+
+static motor_control_loop_t loop1 = {
+    .encoder = &encoder1,
+    .motor = &motor_x,
+    .pid = &pid1,
+    .target_position = 1200.0f,
+    .max_output_freq_hz = 1100.0f,
+    .direction_reversed = false,
+};
+
 void init_scara() {
   i2c_mutex = xSemaphoreCreateMutex();
+  motor_init_dir(&motor_x);
+  motor_create_pwm(&motor_x);
+
   ESP_ERROR_CHECK(encoder_init(&encoder1));
   ESP_LOGI(TAG, "");
   return;
@@ -85,8 +104,14 @@ void init_scara() {
 
 void loop_scara() {
   xTaskCreate(encoder_task, "encoder1_task", 4096, &encoder1, 5, NULL);
+  xTaskCreate(motor_control_task, "motor_ctrl", 4096, &loop1, 5, NULL);
   while (1) {
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    ESP_LOGW(TAG, "changing target_position to 2000");
+    loop1.target_position = 3500;
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
+    ESP_LOGW(TAG, "changing target_position to 1000");
+    loop1.target_position = 500;
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
   }
   return;
 }
