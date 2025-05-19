@@ -106,10 +106,10 @@ void loop_scara() {
   xTaskCreate(encoder_task, "encoder1_task", 4096, &encoder1, 5, NULL);
   xTaskCreate(motor_control_task, "motor_ctrl", 4096, &loop1, 5, NULL);
   while (1) {
-    ESP_LOGW(TAG, "changing target_position to 2000");
+    ESP_LOGW(TAG, "changing target_position to 3500");
     loop1.target_position = 3500;
     vTaskDelay(5000 / portTICK_PERIOD_MS);
-    ESP_LOGW(TAG, "changing target_position to 1000");
+    ESP_LOGW(TAG, "changing target_position to 500");
     loop1.target_position = 500;
     vTaskDelay(5000 / portTICK_PERIOD_MS);
   }
