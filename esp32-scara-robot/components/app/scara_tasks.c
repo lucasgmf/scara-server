@@ -60,7 +60,7 @@ void encoder_task(void *arg) {
   return;
 }
 
-#define MOTOR_CONTROL_TASK_PERIOD_MS 10
+#define MOTOR_CONTROL_TASK_PERIOD_MS 20
 
 void motor_control_task(void *arg) {
   motor_control_loop_t *loop = (motor_control_loop_t *)arg;
@@ -169,6 +169,7 @@ void tcp_server_task(void *arg) {
     ESP_LOGI(TAG, "Connection from %s", addr_str);
 
     while (1) {
+      ESP_LOGI(TAG, "Free stack: %d", uxTaskGetStackHighWaterMark(NULL));
       int len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
       if (len < 0) {
         ESP_LOGE(TAG, "recv failed: errno %d", errno);
@@ -176,17 +177,28 @@ void tcp_server_task(void *arg) {
       } else if (len == 0) {
         ESP_LOGI(TAG, "Connection closed");
         break;
-      } else {
-        rx_buffer[len] = 0;
-        ESP_LOGI(TAG, "Received raw: %s", rx_buffer);
+      }
 
-        // Parse comma-separated integers
-        char *token = strtok(rx_buffer, ",");
-        int idx = 1;
-        while (token != NULL) {
-          int value = atoi(token); // Or use atof() for float
-          ESP_LOGI(TAG, "Value %d: %d", idx++, value);
-          token = strtok(NULL, ",");
+      else {
+        rx_buffer[len] = 0;
+        ESP_LOGI(TAG, "Received: %s", rx_buffer);
+
+        int count = sscanf(rx_buffer, "%f,%f,%f,%d,%d", &net_conf->rec_data->Kp,
+                           &net_conf->rec_data->Ki, &net_conf->rec_data->Kd,
+                           &net_conf->rec_data->target_position_1,
+                           &net_conf->rec_data->target_position_2);
+
+        if (count == 5) {
+          ESP_LOGI(TAG, "Parsed values:");
+          ESP_LOGI(TAG, "Kp: %.2f, Ki: %.2f, Kd: %.2f", net_conf->rec_data->Kp,
+                   net_conf->rec_data->Ki, net_conf->rec_data->Kd);
+          ESP_LOGI(TAG, "Target: %.2f, Test Num: %.2f",
+                   net_conf->rec_data->target_position_1,
+                   net_conf->rec_data->target_position_2);
+
+          // Use parsed.Kp, parsed.Ki, etc. as needed in your control logic
+        } else {
+          ESP_LOGW(TAG, "Failed to parse input data. Received: %s", rx_buffer);
         }
       }
     }

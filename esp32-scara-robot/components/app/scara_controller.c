@@ -78,9 +78,9 @@ motor_t motor_y = {
 
 static pid_controller_t pid1 = {
     .Kp = 1.2f,
-    .Ki = 0.01f * 0.1,
+    .Ki = 0.001f,
     .Kd = 0.1f,
-    .output_limit = 500.0f, // Hz max
+    .output_limit = 500.0f,
 };
 
 static motor_control_loop_t loop1 = {
@@ -96,43 +96,54 @@ static motor_control_loop_t loop1 = {
 wifi_config_t wifi_config_a = {
     .sta = {.ssid = WIFI_SSID, .password = WIFI_PASS},
 };
+
+wifi_rec_data wifi_received_data = {
+    .Kp = 1.2f,
+    .Ki = 0.001f,
+    .Kd = 0.1f,
+    .target_position_1 = 2000,
+    .target_position_2 = 2000,
+};
+
 network_configuration esp_network = {
     .wifi_config = &wifi_config_a,
     .port = PORT,
     .rx_buffer_size = RX_BUFFER_SIZE,
     .addr_str_size = ADDR_STR_SIZE,
+    .rec_data = &wifi_received_data,
 };
 
 void init_scara() {
-
-  // wifi-module
+  // wifi management
   nvs_flash_init();
   init_wifi(&esp_network);
 
-  ESP_LOGI(TAG, "Socket bound, port %d", PORT);
   // PID + motor tasks
-  /* i2c_mutex = xSemaphoreCreateMutex(); */
-  /* motor_init_dir(&motor_x); */
-  /* motor_create_pwm(&motor_x); */
-  /* ESP_ERROR_CHECK(encoder_init(&encoder1)); */
+  i2c_mutex = xSemaphoreCreateMutex();
+  motor_init_dir(&motor_x);
+  motor_create_pwm(&motor_x);
+  ESP_ERROR_CHECK(encoder_init(&encoder1));
 
   ESP_LOGI(TAG, "");
-
   return;
 }
 
 void loop_scara() {
-  /* xTaskCreate(encoder_task, "encoder1_task", 4096, &encoder1, 5, NULL); */
-  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &loop1, 5, NULL); */
-  xTaskCreate(tcp_server_task, "tcp_server", 4096, &esp_network, 5, NULL);
+  xTaskCreate(encoder_task, "encoder1_task", 4096, &encoder1, 5, NULL);
+  xTaskCreate(motor_control_task, "motor_ctrl", 4096, &loop1, 5, NULL);
+  xTaskCreate(tcp_server_task, "tcp_server", 4096, &esp_network, 6, NULL);
 
   while (1) {
-    /* ESP_LOGW(TAG, "changing target_position to 3500"); */
-    /* loop1.target_position = 3500; */
-    /* vTaskDelay(5000 / portTICK_PERIOD_MS); */
-    /* ESP_LOGW(TAG, "changing target_position to 500"); */
-    /* loop1.target_position = 500; */
+    ESP_LOGW(TAG, "changing target_position to %d",
+             esp_network.rec_data->target_position_1);
+    loop1.target_position = esp_network.rec_data->target_position_1;
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
+
+    ESP_LOGW(TAG, "changing target_position to %d",
+             esp_network.rec_data->target_position_2);
+    loop1.target_position = esp_network.rec_data->target_position_2;
     vTaskDelay(5000 / portTICK_PERIOD_MS);
   }
+
   return;
 }
