@@ -37,6 +37,12 @@
 
 // network/wifi_manager
 #include "wifi_manager.h"
+#define PORT 42424
+#define WIFI_SSID "lucas"
+#define WIFI_PASS "dahyuntwice"
+
+#define RX_BUFFER_SIZE 128
+#define ADDR_STR_SIZE 128
 
 void init_scara();
 void loop_scara();

@@ -92,131 +92,16 @@ static motor_control_loop_t loop1 = {
     .direction_reversed = false,
 };
 
-#define PORT 42424
-#define WIFI_SSID "lucas"
-#define WIFI_PASS "dahyuntwice"
-
+// --- network/wifi_manager ---
 wifi_config_t wifi_config_a = {
     .sta = {.ssid = WIFI_SSID, .password = WIFI_PASS},
 };
-
-typedef struct {
-  wifi_config_t *wifi_config;
-  unsigned short port;
-  int rx_buffer_size;
-  int addr_str_size;
-} network_configuration;
-
-#define RX_BUFFER_SIZE 128
-#define ADDR_STR_SIZE 128
-
 network_configuration esp_network = {
     .wifi_config = &wifi_config_a,
     .port = PORT,
     .rx_buffer_size = RX_BUFFER_SIZE,
     .addr_str_size = ADDR_STR_SIZE,
 };
-
-void init_wifi(network_configuration *net_conf) {
-  esp_netif_init();
-  esp_event_loop_create_default();
-  esp_netif_create_default_wifi_sta();
-
-  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-  esp_wifi_init(&cfg);
-
-  esp_wifi_set_mode(WIFI_MODE_STA);
-  esp_wifi_set_config(ESP_IF_WIFI_STA, net_conf->wifi_config);
-  esp_wifi_start();
-  esp_wifi_connect();
-}
-
-void tcp_server_task(void *arg) {
-  network_configuration *net_conf = (network_configuration *)arg;
-  if (net_conf == NULL) {
-    ESP_LOGE(TAG, "Parameter is null, aborting.");
-    vTaskDelete(NULL);
-    return;
-  }
-
-  char rx_buffer[net_conf->rx_buffer_size];
-  char addr_str[net_conf->addr_str_size];
-
-  struct sockaddr_in dest_addr = {
-      .sin_addr.s_addr = htonl(INADDR_ANY),
-      .sin_family = AF_INET,
-      .sin_port = htons(net_conf->port),
-  };
-
-  int listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-  if (listen_sock < 0) {
-    ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-    vTaskDelete(NULL);
-    return;
-  }
-  ESP_LOGI(TAG, "Socket created");
-
-  int err = bind(listen_sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
-  if (err != 0) {
-    ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
-    close(listen_sock);
-    vTaskDelete(NULL);
-    return;
-  }
-  ESP_LOGI(TAG, "Socket bound, port %d", net_conf->port);
-
-  err = listen(listen_sock, 1);
-  if (err != 0) {
-    ESP_LOGE(TAG, "Error occurred during listen: errno %d", errno);
-    close(listen_sock);
-    vTaskDelete(NULL);
-    return;
-  }
-
-  while (1) {
-    ESP_LOGI(TAG, "Waiting for connection...");
-    struct sockaddr_in6 source_addr;
-    socklen_t addr_len = sizeof(source_addr);
-    int sock = accept(listen_sock, (struct sockaddr *)&source_addr, &addr_len);
-    if (sock < 0) {
-      ESP_LOGE(TAG, "Unable to accept connection: errno %d", errno);
-      break;
-    }
-
-    inet_ntoa_r(((struct sockaddr_in *)&source_addr)->sin_addr, addr_str,
-                sizeof(addr_str) - 1);
-    ESP_LOGI(TAG, "Connection from %s", addr_str);
-
-    while (1) {
-      int len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
-      if (len < 0) {
-        ESP_LOGE(TAG, "recv failed: errno %d", errno);
-        break;
-      } else if (len == 0) {
-        ESP_LOGI(TAG, "Connection closed");
-        break;
-      } else {
-        rx_buffer[len] = 0;
-        ESP_LOGI(TAG, "Received raw: %s", rx_buffer);
-
-        // Parse comma-separated integers
-        char *token = strtok(rx_buffer, ",");
-        int idx = 1;
-        while (token != NULL) {
-          int value = atoi(token); // Or use atof() for float
-          ESP_LOGI(TAG, "Value %d: %d", idx++, value);
-          token = strtok(NULL, ",");
-        }
-      }
-    }
-
-    shutdown(sock, 0);
-    close(sock);
-  }
-
-  close(listen_sock);
-  vTaskDelete(NULL);
-}
 
 void init_scara() {
 

@@ -13,4 +13,13 @@
 #include "nvs_flash.h"
 #include "string.h"
 
+typedef struct {
+  wifi_config_t *wifi_config;
+  unsigned short port;
+  int rx_buffer_size;
+  int addr_str_size;
+} network_configuration;
+
+void init_wifi(network_configuration *net_conf);
+
 #endif // WIFI_MANAGER_H
