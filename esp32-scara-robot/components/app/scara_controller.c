@@ -92,25 +92,161 @@ static motor_control_loop_t loop1 = {
     .direction_reversed = false,
 };
 
-void init_scara() {
-  i2c_mutex = xSemaphoreCreateMutex();
-  motor_init_dir(&motor_x);
-  motor_create_pwm(&motor_x);
+#define PORT 42424
+#define WIFI_SSID "lucas"
+#define WIFI_PASS "dahyuntwice"
 
-  ESP_ERROR_CHECK(encoder_init(&encoder1));
+wifi_config_t wifi_config_a = {
+    .sta = {.ssid = WIFI_SSID, .password = WIFI_PASS},
+};
+
+typedef struct {
+  wifi_config_t *wifi_config;
+  unsigned short port;
+  int rx_buffer_size;
+  int addr_str_size;
+} network_configuration;
+
+#define RX_BUFFER_SIZE 128
+#define ADDR_STR_SIZE 128
+
+network_configuration esp_network = {
+    .wifi_config = &wifi_config_a,
+    .port = PORT,
+    .rx_buffer_size = RX_BUFFER_SIZE,
+    .addr_str_size = ADDR_STR_SIZE,
+};
+
+void init_wifi(network_configuration *net_conf) {
+  esp_netif_init();
+  esp_event_loop_create_default();
+  esp_netif_create_default_wifi_sta();
+
+  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+  esp_wifi_init(&cfg);
+
+  esp_wifi_set_mode(WIFI_MODE_STA);
+  esp_wifi_set_config(ESP_IF_WIFI_STA, net_conf->wifi_config);
+  esp_wifi_start();
+  esp_wifi_connect();
+}
+
+void tcp_server_task(void *arg) {
+  network_configuration *net_conf = (network_configuration *)arg;
+  if (net_conf == NULL) {
+    ESP_LOGE(TAG, "Parameter is null, aborting.");
+    vTaskDelete(NULL);
+    return;
+  }
+
+  char rx_buffer[net_conf->rx_buffer_size];
+  char addr_str[net_conf->addr_str_size];
+
+  struct sockaddr_in dest_addr = {
+      .sin_addr.s_addr = htonl(INADDR_ANY),
+      .sin_family = AF_INET,
+      .sin_port = htons(net_conf->port),
+  };
+
+  int listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+  if (listen_sock < 0) {
+    ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
+    vTaskDelete(NULL);
+    return;
+  }
+  ESP_LOGI(TAG, "Socket created");
+
+  int err = bind(listen_sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+  if (err != 0) {
+    ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
+    close(listen_sock);
+    vTaskDelete(NULL);
+    return;
+  }
+  ESP_LOGI(TAG, "Socket bound, port %d", net_conf->port);
+
+  err = listen(listen_sock, 1);
+  if (err != 0) {
+    ESP_LOGE(TAG, "Error occurred during listen: errno %d", errno);
+    close(listen_sock);
+    vTaskDelete(NULL);
+    return;
+  }
+
+  while (1) {
+    ESP_LOGI(TAG, "Waiting for connection...");
+    struct sockaddr_in6 source_addr;
+    socklen_t addr_len = sizeof(source_addr);
+    int sock = accept(listen_sock, (struct sockaddr *)&source_addr, &addr_len);
+    if (sock < 0) {
+      ESP_LOGE(TAG, "Unable to accept connection: errno %d", errno);
+      break;
+    }
+
+    inet_ntoa_r(((struct sockaddr_in *)&source_addr)->sin_addr, addr_str,
+                sizeof(addr_str) - 1);
+    ESP_LOGI(TAG, "Connection from %s", addr_str);
+
+    while (1) {
+      int len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
+      if (len < 0) {
+        ESP_LOGE(TAG, "recv failed: errno %d", errno);
+        break;
+      } else if (len == 0) {
+        ESP_LOGI(TAG, "Connection closed");
+        break;
+      } else {
+        rx_buffer[len] = 0;
+        ESP_LOGI(TAG, "Received raw: %s", rx_buffer);
+
+        // Parse comma-separated integers
+        char *token = strtok(rx_buffer, ",");
+        int idx = 1;
+        while (token != NULL) {
+          int value = atoi(token); // Or use atof() for float
+          ESP_LOGI(TAG, "Value %d: %d", idx++, value);
+          token = strtok(NULL, ",");
+        }
+      }
+    }
+
+    shutdown(sock, 0);
+    close(sock);
+  }
+
+  close(listen_sock);
+  vTaskDelete(NULL);
+}
+
+void init_scara() {
+
+  // wifi-module
+  nvs_flash_init();
+  init_wifi(&esp_network);
+
+  ESP_LOGI(TAG, "Socket bound, port %d", PORT);
+  // PID + motor tasks
+  /* i2c_mutex = xSemaphoreCreateMutex(); */
+  /* motor_init_dir(&motor_x); */
+  /* motor_create_pwm(&motor_x); */
+  /* ESP_ERROR_CHECK(encoder_init(&encoder1)); */
+
   ESP_LOGI(TAG, "");
+
   return;
 }
 
 void loop_scara() {
-  xTaskCreate(encoder_task, "encoder1_task", 4096, &encoder1, 5, NULL);
-  xTaskCreate(motor_control_task, "motor_ctrl", 4096, &loop1, 5, NULL);
+  /* xTaskCreate(encoder_task, "encoder1_task", 4096, &encoder1, 5, NULL); */
+  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &loop1, 5, NULL); */
+  xTaskCreate(tcp_server_task, "tcp_server", 4096, &esp_network, 5, NULL);
+
   while (1) {
-    ESP_LOGW(TAG, "changing target_position to 3500");
-    loop1.target_position = 3500;
-    vTaskDelay(5000 / portTICK_PERIOD_MS);
-    ESP_LOGW(TAG, "changing target_position to 500");
-    loop1.target_position = 500;
+    /* ESP_LOGW(TAG, "changing target_position to 3500"); */
+    /* loop1.target_position = 3500; */
+    /* vTaskDelay(5000 / portTICK_PERIOD_MS); */
+    /* ESP_LOGW(TAG, "changing target_position to 500"); */
+    /* loop1.target_position = 500; */
     vTaskDelay(5000 / portTICK_PERIOD_MS);
   }
   return;

@@ -35,6 +35,9 @@
 #define GPIOZSTP GPIO_NUM_17
 /* #define GPIOASTP 50 // WARN - Find GPIO number */
 
+// network/wifi_manager
+#include "wifi_manager.h"
+
 void init_scara();
 void loop_scara();
 
