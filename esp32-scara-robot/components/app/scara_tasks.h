@@ -12,8 +12,12 @@
 #include "encoder.h"
 #include "encoder_d.h"
 
+#include "wifi_manager.h"
+
 void task_update_motor_pwm(void *arg);
-void encoder_task(void *param);
-void motor_control_task(void *param);
+void encoder_task(void *arg);
+void motor_control_task(void *arg);
+void tcp_server_task(void *arg);
+void tcp_server_task(void *arg);
 
 #endif // SCARA_TASKS_H
