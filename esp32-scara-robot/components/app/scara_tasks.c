@@ -54,13 +54,13 @@ void task_update_motor_pwm(void *arg) {
 void encoder_task(void *arg) {
   encoder_t *enc = (encoder_t *)arg;
   while (1) {
-    encoder_read_angle(enc);
+    /* encoder_read_angle(enc); */
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
   return;
 }
 
-#define MOTOR_CONTROL_TASK_PERIOD_MS 20
+#define MOTOR_CONTROL_TASK_PERIOD_MS 1000
 
 void motor_control_task(void *arg) {
   motor_control_loop_t *loop = (motor_control_loop_t *)arg;
@@ -68,7 +68,8 @@ void motor_control_task(void *arg) {
   const float dt_sec = 0.02f;
 
   while (1) {
-    uint16_t raw = encoder_read_angle(loop->encoder);
+    /* uint16_t raw = encoder_read_angle(loop->encoder); */
+    uint16_t raw = 0;
     loop->current_position = (float)raw;
 
     float error = loop->target_position - loop->current_position;
@@ -112,6 +113,18 @@ void motor_control_task(void *arg) {
   }
 }
 
+bool handle_error(bool condition, const char *message, int sock_to_close) {
+  if (condition) {
+    ESP_LOGE(TAG, "%s: errno %d", message, errno);
+    if (sock_to_close >= 0) {
+      close(sock_to_close);
+    }
+    vTaskDelete(NULL);
+    return true;
+  }
+  return false;
+}
+
 void tcp_server_task(void *arg) {
   network_configuration *net_conf = (network_configuration *)arg;
   if (net_conf == NULL) {
@@ -130,29 +143,18 @@ void tcp_server_task(void *arg) {
   };
 
   int listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-  if (listen_sock < 0) {
-    ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-    vTaskDelete(NULL);
+  if (handle_error(listen_sock < 0, "Unable to create socket", -1))
     return;
-  }
   ESP_LOGI(TAG, "Socket created");
 
   int err = bind(listen_sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
-  if (err != 0) {
-    ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
-    close(listen_sock);
-    vTaskDelete(NULL);
+  if (handle_error(err != 0, "Socket bind failed", listen_sock))
     return;
-  }
   ESP_LOGI(TAG, "Socket bound, port %d", net_conf->port);
 
   err = listen(listen_sock, 1);
-  if (err != 0) {
-    ESP_LOGE(TAG, "Error occurred during listen: errno %d", errno);
-    close(listen_sock);
-    vTaskDelete(NULL);
+  if (handle_error(err != 0, "Listen failed", listen_sock))
     return;
-  }
 
   while (1) {
     ESP_LOGI(TAG, "Waiting for connection...");

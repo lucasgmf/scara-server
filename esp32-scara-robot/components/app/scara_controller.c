@@ -92,9 +92,17 @@ static motor_control_loop_t loop1 = {
     .direction_reversed = false,
 };
 
-// --- network/wifi_manager ---
+//////////////////////////////////
+////// network/wifi_manager //////
+//////////////////////////////////
+
 wifi_config_t wifi_config_a = {
-    .sta = {.ssid = WIFI_SSID, .password = WIFI_PASS},
+    .sta =
+        {
+            .ssid = WIFI_SSID,
+            .password = WIFI_PASS,
+            .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+        },
 };
 
 wifi_rec_data wifi_received_data = {
@@ -105,18 +113,36 @@ wifi_rec_data wifi_received_data = {
     .target_position_2 = 2000,
 };
 
-network_configuration esp_network = {
+network_configuration esp_net_conf = {
     .wifi_config = &wifi_config_a,
     .port = PORT,
+    .retry_num = 0,
     .rx_buffer_size = RX_BUFFER_SIZE,
     .addr_str_size = ADDR_STR_SIZE,
     .rec_data = &wifi_received_data,
+    .s_wifi_event_group = (EventGroupHandle_t)&wifi_received_data,
 };
 
+void wifi_initialization_func() {
+  esp_err_t ret = nvs_flash_init();
+  if (ret == ESP_ERR_NVS_NO_FREE_PAGES ||
+      ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    nvs_flash_erase();
+    nvs_flash_init();
+  }
+
+  esp_err_t wifi_result = init_wifi(&esp_net_conf);
+  if (wifi_result != ESP_OK) {
+    ESP_LOGE(TAG, "Exiting: Wi-Fi connection failed.");
+    esp_deep_sleep_start();
+    return;
+  }
+  xTaskCreate(tcp_server_task, "tcp_server", 4096, &esp_net_conf, 5, NULL);
+  return;
+}
+
 void init_scara() {
-  // wifi management
-  nvs_flash_init();
-  init_wifi(&esp_network);
+  wifi_initialization_func();
 
   // PID + motor tasks
   i2c_mutex = xSemaphoreCreateMutex();
@@ -131,17 +157,16 @@ void init_scara() {
 void loop_scara() {
   xTaskCreate(encoder_task, "encoder1_task", 4096, &encoder1, 5, NULL);
   xTaskCreate(motor_control_task, "motor_ctrl", 4096, &loop1, 5, NULL);
-  xTaskCreate(tcp_server_task, "tcp_server", 4096, &esp_network, 6, NULL);
 
   while (1) {
     ESP_LOGW(TAG, "changing target_position to %d",
-             esp_network.rec_data->target_position_1);
-    loop1.target_position = esp_network.rec_data->target_position_1;
+             esp_net_conf.rec_data->target_position_1);
+    loop1.target_position = esp_net_conf.rec_data->target_position_1;
     vTaskDelay(5000 / portTICK_PERIOD_MS);
 
     ESP_LOGW(TAG, "changing target_position to %d",
-             esp_network.rec_data->target_position_2);
-    loop1.target_position = esp_network.rec_data->target_position_2;
+             esp_net_conf.rec_data->target_position_2);
+    loop1.target_position = esp_net_conf.rec_data->target_position_2;
     vTaskDelay(5000 / portTICK_PERIOD_MS);
   }
 
