@@ -26,6 +26,6 @@ uint16_t encoder_read_angle(encoder_t *encoder) {
     raw = encoder->settings->angle_mask - raw;
   raw = (raw + encoder->settings->zero_offset) & encoder->settings->angle_mask;
 
-  ESP_LOGI(encoder->label, "Angle: %u", raw);
+  /* ESP_LOGI(encoder->label, "Angle: %u", raw); */
   return raw;
 }

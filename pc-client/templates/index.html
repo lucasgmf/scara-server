@@ -119,35 +119,81 @@
                 console.error("Error:", error);
                 document.getElementById("status").innerText = "Error sending values.";
                 setTimeout(() => document.getElementById("status").innerText = "", 2000);
-            });
+            }); 
+        }
+
+        function syncInput(sliderId, inputId) {
+            const val = document.getElementById(sliderId).value;
+            document.getElementById(inputId).value = val;
+        }
+
+        function syncSlider(inputId, sliderId) {
+            const val = document.getElementById(inputId).value;
+            document.getElementById(sliderId).value = val;
+        }
+
+        const defaultValues = {
+            input1: 1.2,
+            input2: 0.001,
+            input3: 0.1,
+            input4: 2000,
+            input5: 2000
+        };
+
+        function resetToDefaults() {
+            for (const [inputId, value] of Object.entries(defaultValues)) {
+                const input = document.getElementById(inputId);
+                const slider = document.getElementById('slider' + inputId.slice(-1));
+                input.value = value;
+                slider.value = value;
+            }
         }
     </script>
 </head>
 <body>
     <div class="container">
-        <h2>Interactive Number Sender</h2>
+        <h2>Send data to Client</h2>
         <form id="sliderForm" onsubmit="sendValues(event)">
-            <div class="slider-container">
-                <label>Value 1: <span id="val1">0</span></label>
-                <input type="range" name="num1" id="slider1" min="-180" max="180" value="0" oninput="updateValue('slider1', 'val1')">
+        <div class="slider-container">
+            <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                <label for="input1" style="margin-right: 8px;">Kp:</label>
+                <input type="number" id="input1" name="num1" min="0" max="10" value="1.2" step="0.01" oninput="syncSlider('input1', 'slider1')">
             </div>
-            <div class="slider-container">
-                <label>Value 2: <span id="val2">0</span></label>
-                <input type="range" name="num2" id="slider2" min="-180" max="180" value="0" oninput="updateValue('slider2', 'val2')">
+            <input type="range" id="slider1" min="0" max="10" value="0" step="0.01" oninput="syncInput('slider1', 'input1')">
+        </div>
+        <div class="slider-container">
+            <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                <label for="input2" style="margin-right: 8px;">Ki:</label>
+                <input type="number" id="input2" name="num2" min="0" max="1" value="0.001" step="0.001" oninput="syncSlider('input2', 'slider2')">
             </div>
-            <div class="slider-container">
-                <label>Value 3: <span id="val3">0</span></label>
-                <input type="range" name="num3" id="slider3" min="-180" max="180" value="0" oninput="updateValue('slider3', 'val3')">
+            <input type="range" id="slider2" min="0" max="1" value="0" step="0.001" oninput="syncInput('slider2', 'input2')">
+        </div>
+
+        <div class="slider-container">
+            <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                <label for="input3" style="margin-right: 8px;">Kd:</label>
+                <input type="number" id="input3" name="num3" min="0" max="1" value="0.1" step="0.001" oninput="syncSlider('input3', 'slider3')">
             </div>
-            <div class="slider-container">
-                <label>Value 4: <span id="val4">0</span></label>
-                <input type="range" name="num4" id="slider4" min="-180" max="180" value="0" oninput="updateValue('slider4', 'val4')">
+            <input type="range" id="slider3" min="0" max="1" value="0" step="0.001" oninput="syncInput('slider3', 'input3')">
+        </div>
+
+        <div class="slider-container">
+            <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                <label for="input4" style="margin-right: 8px;">Target 1:</label>
+                <input type="number" id="input4" name="num4" min="1000" max="3000" value="2000" step="1" oninput="syncSlider('input4', 'slider4')">
             </div>
-            <div class="slider-container">
-                <label>Value 5: <span id="val5">0</span></label>
-                <input type="range" name="num5" id="slider5" min="-180" max="180" value="0" oninput="updateValue('slider5', 'val5')">
+            <input type="range" id="slider4" min="1000" max="3000" value="2000" step="1" oninput="syncInput('slider4', 'input4')">
+        </div>
+
+        <div class="slider-container">
+            <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                <label for="input5" style="margin-right: 8px;">Target 2:</label>
+                <input type="number" id="input5" name="num5" min="1000" max="3000" value="2000" step="1" oninput="syncSlider('input5', 'slider5')">
             </div>
+            <input type="range" id="slider5" min="1000" max="3000" value="2000" step="1" oninput="syncInput('slider5', 'input5')">
+        </div>
             <button type="submit">Send Values</button>
+            <button type="button" onclick="resetToDefaults()">Reset to Defaults</button>
         </form>
         <p id="status"></p>
     </div>
