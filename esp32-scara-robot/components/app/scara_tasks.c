@@ -23,8 +23,8 @@ void task_update_motor_pwm(void *arg) {
   const float dt_sec = TASK_UPDATE_MOTOR_PWM_PERIOD_MS / 1000.0f;
 
   while (true) {
-    /* ESP_LOGI(TAG, "Current freq: %.2f Hz, Target: %d Hz", */
-    /*          motor_n->current_freq_hz, motor_n->target_freq_hz); */
+    ESP_LOGI(TAG, "Current freq: %.2f Hz, Target: %d Hz",
+             motor_n->current_freq_hz, motor_n->target_freq_hz);
 
     float diff = motor_n->target_freq_hz - motor_n->current_freq_hz;
     float step = motor_n->speed_hz * dt_sec;
@@ -54,7 +54,7 @@ void task_update_motor_pwm(void *arg) {
 void encoder_task(void *arg) {
   encoder_t *enc = (encoder_t *)arg;
   while (1) {
-    /* encoder_read_angle(enc); */
+    encoder_read_angle(enc);
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
   return;
