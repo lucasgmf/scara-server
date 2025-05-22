@@ -16,6 +16,9 @@
 // hal_dir/motor
 #include "motor.h"
 
+// hal_dir/i2c_multiplexer
+#include "i2c_multiplexer.h"
+
 // motor ids
 #define MOTOR_X 1
 #define MOTOR_Y 2
