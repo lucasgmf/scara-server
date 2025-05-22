@@ -204,3 +204,24 @@ void tcp_server_task(void *arg) {
   close(listen_sock);
   vTaskDelete(NULL);
 }
+
+void encoder_task(void *arg) {
+  encoder_t *encoder = (encoder_t *)arg;
+  if (encoder == NULL) {
+    ESP_LOGE(TAG, "Parameter is null, aborting.");
+    vTaskDelete(NULL);
+    return;
+  }
+
+  while (1) {
+    uint16_t angle = encoder_read_angle(encoder);
+
+    if (angle != 0xFFFF) {
+      ESP_LOGI(encoder->label, "Angle: %u", angle);
+    } else {
+      ESP_LOGW(encoder->label, "Failed to read angle");
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+}

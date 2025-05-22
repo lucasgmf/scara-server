@@ -66,16 +66,9 @@ void wifi_initialization_func() {
 #define I2C_MASTER_GLITCH_IGNORE_CNT 7
 #define I2C_ENABLE_INTERNAL_PULLUP true
 
-// ensure only one task access shared i2c bus
 static SemaphoreHandle_t i2c_mutex;
 
-///
-/////////////// master bus ///////////////
-///
-
-// represents initialized i2c master bus
 static i2c_master_bus_handle_t master_bus_handle;
-
 static i2c_master_bus_config_t master_bus_config = {
     .clk_source = I2C_CLK_SRC_DEFAULT,
     .i2c_port = I2C_PORT,
@@ -85,13 +78,6 @@ static i2c_master_bus_config_t master_bus_config = {
     .flags.enable_internal_pullup = I2C_ENABLE_INTERNAL_PULLUP,
 };
 
-typedef struct {
-  i2c_master_bus_config_t *bus_cfg;
-  i2c_master_bus_handle_t *bus_handle;
-  SemaphoreHandle_t *i2c_mutex;
-  TickType_t timeout_ticks;
-} i2c_master_config_t;
-
 static i2c_master_config_t i2c_master_conf = {
     .bus_cfg = &master_bus_config,
     .bus_handle = &master_bus_handle,
@@ -99,12 +85,8 @@ static i2c_master_config_t i2c_master_conf = {
     .timeout_ticks = portMAX_DELAY,
 };
 
-///
-/////////////// slave bus ///////////////
-///
-
 #define I2C_DEVICE_SPEED_HZ 100000
-// represents each device on the bus
+
 static i2c_master_dev_handle_t encoder_0_handle;
 static i2c_master_dev_handle_t encoder_1_handle;
 static i2c_master_dev_handle_t tca_handle;
@@ -127,11 +109,6 @@ static i2c_device_config_t tca_cfg = {
     .scl_speed_hz = I2C_DEVICE_SPEED_HZ,
 };
 
-typedef struct {
-  i2c_device_config_t *dev_cfg;
-  i2c_master_dev_handle_t *dev_handle;
-} i2c_slave_bus_params;
-
 static i2c_slave_bus_params i2c_slave_conf_encoder_0 = {
     .dev_cfg = &encoder_0_cfg,
     .dev_handle = &encoder_0_handle,
@@ -146,19 +123,6 @@ static i2c_slave_bus_params i2c_slave_conf_tca = {
     .dev_cfg = &tca_cfg,
     .dev_handle = &tca_handle,
 };
-
-typedef struct {
-  const char *label;
-  i2c_master_config_t *i2c_master;
-  i2c_slave_bus_params *i2c_slave;
-  i2c_slave_bus_params *i2c_tca;
-  uint8_t tca_channel;
-  uint8_t reg_angle_msb;
-  uint16_t reg_angle_mask;
-  // additional ...
-  int offset;   // offset from 0
-  bool reverse; // TODO: change this later
-} encoder_t;
 
 #define ENCODER_MSB_ANGLE_REG 0x0E
 #define ENCODER_ANGLE_MASK 0x0FFF
@@ -186,90 +150,6 @@ static encoder_t encoder_1 = {
     .offset = 0,
     .reverse = false,
 };
-
-esp_err_t tca_select_channel(uint8_t channel,
-                             i2c_master_dev_handle_t *tca_handle) {
-  if (channel > 7)
-    return ESP_ERR_INVALID_ARG;
-
-  uint8_t data = 1 << channel;
-  return i2c_master_transmit(*tca_handle, &data, 1, portMAX_DELAY);
-}
-
-esp_err_t encoder_init(encoder_t *encoder) {
-  if (!encoder || !encoder->i2c_master || !encoder->i2c_slave) {
-    return ESP_ERR_INVALID_ARG;
-  }
-
-  if (!encoder->i2c_master->bus_handle || !encoder->i2c_slave->dev_cfg ||
-      !encoder->i2c_slave->dev_handle) {
-    return ESP_ERR_INVALID_STATE;
-  }
-
-  // Add encoder device to the bus
-  return i2c_master_bus_add_device(*encoder->i2c_master->bus_handle,
-                                   encoder->i2c_slave->dev_cfg,
-                                   encoder->i2c_slave->dev_handle);
-}
-
-uint16_t encoder_read_angle(encoder_t *encoder) {
-  uint8_t reg = encoder->reg_angle_msb;
-  uint8_t data[2];
-
-  if (xSemaphoreTake(*encoder->i2c_master->i2c_mutex,
-                     encoder->i2c_master->timeout_ticks) != pdTRUE) {
-    ESP_LOGE(encoder->label, "Mutex timeout");
-    return 0xFFFF;
-  }
-
-  esp_err_t ret =
-      tca_select_channel(encoder->tca_channel, encoder->i2c_tca->dev_handle);
-  if (ret != ESP_OK) {
-    ESP_LOGE(encoder->label, "TCA channel select failed: %s",
-             esp_err_to_name(ret));
-    xSemaphoreGive(*encoder->i2c_master->i2c_mutex);
-    return 0xFFFF;
-  }
-
-  ret =
-      i2c_master_transmit_receive(*encoder->i2c_slave->dev_handle, &reg, 1,
-                                  data, 2, encoder->i2c_master->timeout_ticks);
-
-  xSemaphoreGive(*encoder->i2c_master->i2c_mutex);
-
-  if (ret != ESP_OK) {
-    ESP_LOGE(encoder->label, "Read error: %s", esp_err_to_name(ret));
-    return 0xFFFF;
-  }
-
-  uint16_t raw = ((data[0] << 8) | data[1]) & encoder->reg_angle_mask;
-  if (encoder->reverse)
-    raw = encoder->reg_angle_mask - raw;
-  raw = (raw + encoder->offset) & encoder->reg_angle_mask;
-
-  return raw;
-}
-
-void encoder_task(void *arg) {
-  encoder_t *encoder = (encoder_t *)arg;
-  if (encoder == NULL) {
-    ESP_LOGE(TAG, "Parameter is null, aborting.");
-    vTaskDelete(NULL);
-    return;
-  }
-
-  while (1) {
-    uint16_t angle = encoder_read_angle(encoder);
-
-    if (angle != 0xFFFF) {
-      ESP_LOGI(encoder->label, "Angle: %u", angle);
-    } else {
-      ESP_LOGW(encoder->label, "Failed to read angle");
-    }
-
-    vTaskDelay(pdMS_TO_TICKS(100));
-  }
-}
 
 void encoder_initialization_task() {
   i2c_mutex = xSemaphoreCreateMutex();
