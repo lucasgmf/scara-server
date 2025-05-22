@@ -8,6 +8,5 @@
 
 #include "encoder.h"
 
-uint16_t encoder_read_angle(encoder_t *encoder);
 
 #endif // ENCODER_D_H
