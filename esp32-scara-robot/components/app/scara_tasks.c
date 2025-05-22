@@ -51,14 +51,6 @@ void task_update_motor_pwm(void *arg) {
   }
 }
 
-void encoder_task(void *arg) {
-  encoder_t *enc = (encoder_t *)arg;
-  while (1) {
-    encoder_read_angle(enc);
-    vTaskDelay(pdMS_TO_TICKS(1000));
-  }
-  return;
-}
 
 #define MOTOR_CONTROL_TASK_PERIOD_MS 1000
 
