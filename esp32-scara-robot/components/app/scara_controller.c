@@ -110,6 +110,15 @@ void encoder_task(void *arg) {
   return;
 }
 
+void encoder_initialization_task() {
+  // PID + motor tasks
+  i2c_mutex = xSemaphoreCreateMutex();
+  ESP_ERROR_CHECK(encoder_init(&encoder1));
+
+  xTaskCreate(encoder_task, "encoder1_task", 4096, &encoder1, 5, NULL);
+  return;
+}
+
 //////////////////////////////////
 ////// hal_dir/motor /////////////
 //////////////////////////////////
@@ -151,6 +160,7 @@ static pid_controller_t pid1 = {
 
 static motor_control_loop_t loop1 = {
     /* .encoder = &encoder1, */
+    NULL,
     .motor = &motor_x,
     .pid = &pid1,
     .target_position = 1200.0f,
@@ -158,23 +168,24 @@ static motor_control_loop_t loop1 = {
     .direction_reversed = false,
 };
 
-void init_scara() {
-  wifi_initialization_func();
-
-  // PID + motor tasks
-  i2c_mutex = xSemaphoreCreateMutex();
+void motor_initialization_task() {
   motor_init_dir(&motor_x);
   motor_create_pwm(&motor_x);
-  ESP_ERROR_CHECK(encoder_init(&encoder1));
+
+  xTaskCreate(motor_control_task, "motor_ctrl", 4096, &loop1, 5, NULL);
+  return;
+}
+
+void init_scara() {
+  wifi_initialization_func();
+  encoder_initialization_task();
+  motor_initialization_task();
 
   ESP_LOGI(TAG, "");
   return;
 }
 
 void loop_scara() {
-  xTaskCreate(encoder_task, "encoder1_task", 4096, &encoder1, 5, NULL);
-  xTaskCreate(motor_control_task, "motor_ctrl", 4096, &loop1, 5, NULL);
-
   while (1) {
     ESP_LOGW(TAG, "changing target_position to %d",
              esp_net_conf.rec_data->target_position_1);
