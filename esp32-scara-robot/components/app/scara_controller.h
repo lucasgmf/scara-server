@@ -12,10 +12,6 @@
 
 // drivers/i2c_bus
 #include "i2c_bus.h"
-#define I2C_SCL GPIO_NUM_22
-#define I2C_SDA GPIO_NUM_21
-#define I2C_PORT I2C_NUM_0
-#define AS5600_ADDR 0x36
 
 // hal_dir/motor
 #include "motor.h"
