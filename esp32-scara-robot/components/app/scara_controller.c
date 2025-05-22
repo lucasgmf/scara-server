@@ -151,6 +151,7 @@ typedef struct {
   const char *label;
   i2c_master_config_t *i2c_master;
   i2c_slave_bus_params *i2c_slave;
+  i2c_slave_bus_params *i2c_tca;
   uint8_t tca_channel;
   uint8_t reg_angle_msb;
   uint16_t reg_angle_mask;
@@ -166,6 +167,7 @@ static encoder_t encoder_0 = {
     .label = "Encoder 0",
     .i2c_master = &i2c_master_conf,
     .i2c_slave = &i2c_slave_conf_encoder_0,
+    .i2c_tca = &i2c_slave_conf_tca,
     .tca_channel = 0,
     .reg_angle_msb = ENCODER_MSB_ANGLE_REG,
     .reg_angle_mask = ENCODER_ANGLE_MASK,
@@ -177,6 +179,7 @@ static encoder_t encoder_1 = {
     .label = "Encoder 1",
     .i2c_master = &i2c_master_conf,
     .i2c_slave = &i2c_slave_conf_encoder_1,
+    .i2c_tca = &i2c_slave_conf_tca,
     .tca_channel = 1,
     .reg_angle_msb = ENCODER_MSB_ANGLE_REG,
     .reg_angle_mask = ENCODER_ANGLE_MASK,
@@ -184,13 +187,13 @@ static encoder_t encoder_1 = {
     .reverse = false,
 };
 
-esp_err_t tca_select_channel(uint8_t channel) {
+esp_err_t tca_select_channel(uint8_t channel,
+                             i2c_master_dev_handle_t *tca_handle) {
   if (channel > 7)
     return ESP_ERR_INVALID_ARG;
 
   uint8_t data = 1 << channel;
-
-  return i2c_master_transmit(tca_handle, &data, 1, portMAX_DELAY);
+  return i2c_master_transmit(*tca_handle, &data, 1, portMAX_DELAY);
 }
 
 esp_err_t encoder_init(encoder_t *encoder) {
@@ -219,7 +222,8 @@ uint16_t encoder_read_angle(encoder_t *encoder) {
     return 0xFFFF;
   }
 
-  esp_err_t ret = tca_select_channel(encoder->tca_channel);
+  esp_err_t ret =
+      tca_select_channel(encoder->tca_channel, encoder->i2c_tca->dev_handle);
   if (ret != ESP_OK) {
     ESP_LOGE(encoder->label, "TCA channel select failed: %s",
              esp_err_to_name(ret));
@@ -268,7 +272,7 @@ void encoder_task(void *arg) {
 }
 
 void encoder_initialization_task() {
-  i2c_mutex = xSemaphoreCreateMutex(); // WARN: Commented :O
+  i2c_mutex = xSemaphoreCreateMutex();
 
   ESP_ERROR_CHECK(
       i2c_new_master_bus(i2c_master_conf.bus_cfg, i2c_master_conf.bus_handle));
@@ -277,7 +281,8 @@ void encoder_initialization_task() {
                                             i2c_slave_conf_tca.dev_cfg,
                                             i2c_slave_conf_tca.dev_handle));
 
-  ESP_ERROR_CHECK(tca_select_channel(encoder_0.tca_channel));
+  ESP_ERROR_CHECK(
+      tca_select_channel(encoder_0.tca_channel, encoder_0.i2c_tca->dev_handle));
   ESP_ERROR_CHECK(i2c_master_bus_add_device(
       *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_0.dev_cfg,
       i2c_slave_conf_encoder_0.dev_handle));
@@ -285,7 +290,8 @@ void encoder_initialization_task() {
   ESP_ERROR_CHECK(encoder_init(&encoder_0));
   xTaskCreate(encoder_task, "encoder0_task", 4096, &encoder_0, 5, NULL);
 
-  ESP_ERROR_CHECK(tca_select_channel(encoder_1.tca_channel));
+  ESP_ERROR_CHECK(
+      tca_select_channel(encoder_1.tca_channel, encoder_1.i2c_tca->dev_handle));
   ESP_ERROR_CHECK(i2c_master_bus_add_device(
       *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_1.dev_cfg,
       i2c_slave_conf_encoder_1.dev_handle));
