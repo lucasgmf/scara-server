@@ -7,24 +7,22 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "i2c_bus.h"
-
-#include "switch_h.h"
-
-typedef struct {
-  uint8_t angle_reg;
-  uint16_t angle_mask;
-  bool reverse;
-  int16_t zero_offset;
-  // TODO: Add calibration params etc...
-} encoder_settings_t;
+#include "i2c_multiplexer.h"
 
 typedef struct {
-  encoder_settings_t *settings;
-  i2c_master_config_t *i2c_master;
-  i2c_slave_config_t *i2c_slave;
   const char *label;
+  i2c_master_config_t *i2c_master;
+  i2c_slave_bus_params *i2c_slave;
+  i2c_slave_bus_params *i2c_tca;
+  uint8_t tca_channel;
+  uint8_t reg_angle_msb;
+  uint16_t reg_angle_mask;
+  // additional ...
+  int offset;   // offset from 0
+  bool reverse; // TODO: change this later
 } encoder_t;
 
 esp_err_t encoder_init(encoder_t *encoder);
+uint16_t encoder_read_angle(encoder_t *encoder);
 
 #endif // ENCODER_H

@@ -7,7 +7,7 @@
 #include "pid.h"
 
 typedef struct {
-  encoder_t *encoder;
+  /* encoder_t *encoder; */
   motor_t *motor;
   pid_controller_t *pid;
   float target_position;    // Desired encoder position

@@ -1,17 +1,55 @@
 #include "encoder.h"
 
 esp_err_t encoder_init(encoder_t *encoder) {
-  esp_err_t ret;
+  if (!encoder || !encoder->i2c_master || !encoder->i2c_slave) {
+    return ESP_ERR_INVALID_ARG;
+  }
 
-  // Init bus (if not already)
-  ret = i2c_new_master_bus(encoder->i2c_master->bus_cfg,
-                           encoder->i2c_master->bus_handle);
-  if (ret != ESP_OK)
-    return ret;
+  if (!encoder->i2c_master->bus_handle || !encoder->i2c_slave->dev_cfg ||
+      !encoder->i2c_slave->dev_handle) {
+    return ESP_ERR_INVALID_STATE;
+  }
 
-  // Add device
-  ret = i2c_master_bus_add_device(*encoder->i2c_master->bus_handle,
-                                  encoder->i2c_slave->dev_cfg,
-                                  encoder->i2c_slave->dev_handle);
-  return ret;
+  // Add encoder device to the bus
+  return i2c_master_bus_add_device(*encoder->i2c_master->bus_handle,
+                                   encoder->i2c_slave->dev_cfg,
+                                   encoder->i2c_slave->dev_handle);
+}
+
+uint16_t encoder_read_angle(encoder_t *encoder) {
+  uint8_t reg = encoder->reg_angle_msb;
+  uint8_t data[2];
+
+  if (xSemaphoreTake(*encoder->i2c_master->i2c_mutex,
+                     encoder->i2c_master->timeout_ticks) != pdTRUE) {
+    ESP_LOGE(encoder->label, "Mutex timeout");
+    return 0xFFFF;
+  }
+
+  esp_err_t ret =
+      tca_select_channel(encoder->tca_channel, encoder->i2c_tca->dev_handle);
+  if (ret != ESP_OK) {
+    ESP_LOGE(encoder->label, "TCA channel select failed: %s",
+             esp_err_to_name(ret));
+    xSemaphoreGive(*encoder->i2c_master->i2c_mutex);
+    return 0xFFFF;
+  }
+
+  ret =
+      i2c_master_transmit_receive(*encoder->i2c_slave->dev_handle, &reg, 1,
+                                  data, 2, encoder->i2c_master->timeout_ticks);
+
+  xSemaphoreGive(*encoder->i2c_master->i2c_mutex);
+
+  if (ret != ESP_OK) {
+    ESP_LOGE(encoder->label, "Read error: %s", esp_err_to_name(ret));
+    return 0xFFFF;
+  }
+
+  uint16_t raw = ((data[0] << 8) | data[1]) & encoder->reg_angle_mask;
+  if (encoder->reverse)
+    raw = encoder->reg_angle_mask - raw;
+  raw = (raw + encoder->offset) & encoder->reg_angle_mask;
+
+  return raw;
 }

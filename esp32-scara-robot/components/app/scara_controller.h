@@ -1,48 +1,73 @@
 #ifndef SCARA_CONTROLLER_H
 #define SCARA_CONTROLLER_H
 
-// app/scara_tasks
-#include "scara_tasks.h"
+///////////////////////////////////////////////////////////////
+/////////////////// HARDWARE ABSTRACT LAYER ///////////////////
+///////////////////////////////////////////////////////////////
 
-#include "driver/i2c_master.h"
-#include "esp_log.h"
+#include "i2c_multiplexer.h"
+#define I2C_ADDR_TCA 0x70
+#define I2C_ADDR_AS5600 0x36
 
-// hal_dir/switch_h
-#include "switch_h.h"
+#define GPIO_I2C_SCL GPIO_NUM_22
+#define GPIO_I2C_SDA GPIO_NUM_21
 
-// drivers/i2c_bus
-#include "i2c_bus.h"
-#define I2C_SCL GPIO_NUM_22
-#define I2C_SDA GPIO_NUM_21
 #define I2C_PORT I2C_NUM_0
-#define AS5600_ADDR 0x36
+#define I2C_MASTER_GLITCH_IGNORE_CNT 7
+#define I2C_ENABLE_INTERNAL_PULLUP true
+#define I2C_DEVICE_SPEED_HZ 100000
 
-// hal_dir/motor
+#include "encoder.h"
+#define ENCODER_MSB_ANGLE_REG 0x0E
+#define ENCODER_ANGLE_MASK 0x0FFF
+
 #include "motor.h"
-
-// motor ids
 #define MOTOR_X 1
 #define MOTOR_Y 2
 #define MOTOR_Z 3
-/* #define MOTOR_A 4 */
 
 #define GPIOXDIR GPIO_NUM_16
 #define GPIOYDIR GPIO_NUM_27
 #define GPIOZDIR GPIO_NUM_14
-/* #define GPIOADIR 50 // WARN - Find GPIO number */
 #define GPIOXSTP GPIO_NUM_26
 #define GPIOYSTP GPIO_NUM_25
 #define GPIOZSTP GPIO_NUM_17
-/* #define GPIOASTP 50 // WARN - Find GPIO number */
 
-// network/wifi_manager
+#include "switch_h.h"
+
+///////////////////////////////////////////////
+/////////////////// DRIVERS ///////////////////
+///////////////////////////////////////////////
+
+#include "driver/i2c_master.h"
+
+///////////////////////////////////////////////
+/////////////////// DEVICES ///////////////////
+///////////////////////////////////////////////
+
+///////////////////////////////////////////////
+/////////////////// CONTROL ///////////////////
+///////////////////////////////////////////////
+
+///////////////////////////////////////////////
+///////////////////// APP /////////////////////
+///////////////////////////////////////////////
+
+#include "scara_tasks.h"
+
+///////////////////////////////////////////////
+/////////////////// NETWORK ///////////////////
+///////////////////////////////////////////////
+
 #include "wifi_manager.h"
+
 #define PORT 42424
 #define WIFI_SSID "lucas"
 #define WIFI_PASS "dahyuntwice"
 
 #define RX_BUFFER_SIZE 128
 #define ADDR_STR_SIZE 128
+
 
 void init_scara();
 void loop_scara();
