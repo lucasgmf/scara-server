@@ -55,17 +55,6 @@ void wifi_initialization_func() {
 ////// drivers/i2c_bus ///////////
 //////////////////////////////////
 
-#define I2C_ADDR_TCA 0x70
-#define I2C_ADDR_AS5600 0x36
-
-#define GPIO_I2C_SCL GPIO_NUM_22
-#define GPIO_I2C_SDA GPIO_NUM_21
-
-#define I2C_PORT I2C_NUM_0
-
-#define I2C_MASTER_GLITCH_IGNORE_CNT 7
-#define I2C_ENABLE_INTERNAL_PULLUP true
-
 static SemaphoreHandle_t i2c_mutex;
 
 static i2c_master_bus_handle_t master_bus_handle;
@@ -84,8 +73,6 @@ static i2c_master_config_t i2c_master_conf = {
     .i2c_mutex = &i2c_mutex,
     .timeout_ticks = portMAX_DELAY,
 };
-
-#define I2C_DEVICE_SPEED_HZ 100000
 
 static i2c_master_dev_handle_t encoder_0_handle;
 static i2c_master_dev_handle_t encoder_1_handle;
@@ -123,9 +110,6 @@ static i2c_slave_bus_params i2c_slave_conf_tca = {
     .dev_cfg = &tca_cfg,
     .dev_handle = &tca_handle,
 };
-
-#define ENCODER_MSB_ANGLE_REG 0x0E
-#define ENCODER_ANGLE_MASK 0x0FFF
 
 static encoder_t encoder_0 = {
     .label = "Encoder 0",
@@ -210,7 +194,7 @@ motor_t motor_y = {
     .move_ms = 0,
     .current_freq_hz = 200,
     .target_freq_hz = 0,
-    .speed_hz = 800,
+    .speed_hz = 800, // variation speed
 };
 
 static pid_controller_t pid1 = {
