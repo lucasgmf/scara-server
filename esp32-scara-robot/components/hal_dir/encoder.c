@@ -10,6 +10,8 @@ esp_err_t encoder_init(encoder_t *encoder) {
     return ESP_ERR_INVALID_STATE;
   }
 
+  ESP_LOGI(encoder->label, "was initialized!");
+
   // Add encoder device to the bus
   return i2c_master_bus_add_device(*encoder->i2c_master->bus_handle,
                                    encoder->i2c_slave->dev_cfg,
@@ -49,7 +51,9 @@ uint16_t encoder_read_angle(encoder_t *encoder) {
   uint16_t raw = ((data[0] << 8) | data[1]) & encoder->reg_angle_mask;
   if (encoder->reverse)
     raw = encoder->reg_angle_mask - raw;
-  raw = (raw + encoder->offset) & encoder->reg_angle_mask;
+  raw = (raw + (uint16_t)encoder->offset) & encoder->reg_angle_mask;
 
+  /* ESP_LOGI("encoder_read_angle", "updating encoder value to %d", raw); */
+  encoder->current_reading = raw;
   return raw;
 }

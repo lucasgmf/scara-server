@@ -3,5 +3,4 @@
 
 #include "encoder.h"
 
-
 #endif // ENCODER_D_H

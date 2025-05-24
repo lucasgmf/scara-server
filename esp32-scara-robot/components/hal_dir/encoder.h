@@ -18,8 +18,9 @@ typedef struct {
   uint8_t reg_angle_msb;
   uint16_t reg_angle_mask;
   // additional ...
-  int offset;   // offset from 0
+  float offset;   // offset from 0
   bool reverse; // TODO: change this later
+  float current_reading;
 } encoder_t;
 
 esp_err_t encoder_init(encoder_t *encoder);

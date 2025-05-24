@@ -15,8 +15,6 @@
 
 #include "wifi_manager.h"
 
-void task_update_motor_pwm(void *arg);
-void motor_control_task(void *arg);
 void tcp_server_task(void *arg);
 void tcp_server_task(void *arg);
 void encoder_task(void *arg);

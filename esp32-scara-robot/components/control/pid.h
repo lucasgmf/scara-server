@@ -7,7 +7,6 @@ typedef struct {
   float Kd;
   float integral;
   float prev_error;
-  float output_limit; // Optional clamp
 } pid_controller_t;
 
 #endif // PID_H
