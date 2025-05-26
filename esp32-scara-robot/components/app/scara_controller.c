@@ -122,6 +122,9 @@ static encoder_t encoder_0 = {
     .offset = 0,
     .reverse = false,
     .current_reading = 0,
+    .accumulated_steps = 0,
+    .is_inverted = 1,
+    .gear_ratio = 62.0 / 18.0,
 };
 
 void encoder_initialization_task() {
@@ -183,9 +186,9 @@ motor_pwm_vars_t pwm_vars_x = {
 };
 
 pid_controller_t pid_x = {
-    .Kp = 1,           // 1
-    .Ki = 0.005 * 0.5, // 0.01
-    .Kd = 0.2,         // 0.2
+    .Kp = 1,      // 1
+    .Ki = 0.0025, // 0.01
+    .Kd = 0.2,    // 0.2
 };
 
 motor_control_vars control_vars_x = {

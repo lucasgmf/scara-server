@@ -108,6 +108,8 @@ void tcp_server_task(void *arg) {
   close(listen_sock);
   vTaskDelete(NULL);
 }
+#define MAX_ENCODER_VAL 4096 // 12-bit encoder
+#define HALF_ENCODER_VAL (MAX_ENCODER_VAL / 2)
 
 void encoder_task(void *arg) {
   encoder_t *encoder = (encoder_t *)arg;
@@ -116,61 +118,49 @@ void encoder_task(void *arg) {
     vTaskDelete(NULL);
     return;
   }
+  // first read
+  uint16_t last_angle = encoder_read_angle(encoder);
+
+  // to track full rotations
+  int32_t accumulated_position = 0;
+
+  uint16_t current_angle;
+  int16_t delta;
 
   while (1) {
-    uint16_t angle = encoder_read_angle(encoder);
 
-    if (angle != 0xFFFF) {
-      /* ESP_LOGI(encoder->label, "Angle: %u", angle); */
-    } else {
+    current_angle = encoder_read_angle(encoder);
+
+    if (current_angle == 0xFFFF) {
       ESP_LOGW(encoder->label, "Failed to read angle");
     }
 
+    delta = (int16_t)current_angle - (int16_t)last_angle;
+
+    // Handle wraparound (shortest path)
+    if (delta > HALF_ENCODER_VAL) {
+      delta -= MAX_ENCODER_VAL;
+    } else if (delta < -HALF_ENCODER_VAL) {
+      delta += MAX_ENCODER_VAL;
+    }
+
+    // follow "regra da mão direita"
+    delta *= encoder->is_inverted;
+
+    accumulated_position += delta;
+    last_angle = current_angle;
+
+    ESP_LOGI(encoder->label,
+             "Angle: %u | Delta: %d | Position: %ld | angle_deg: %.2f | "
+             "angle_rad :%.2f",
+             current_angle, delta, accumulated_position,
+             current_angle * 360.0 / 4096 / encoder->gear_ratio,
+             current_angle * 2 * M_PI / encoder->gear_ratio / 4096);
+
+    encoder->accumulated_steps = accumulated_position;
     vTaskDelay(pdMS_TO_TICKS(25));
   }
 }
-
-#define TASK_UPDATE_MOTOR_PWM_PERIOD_MS 20
-
-/* void task_update_motor_pwm(void *arg) { */
-/*   motor_t *motor_n = (motor_t *)arg; */
-/*   if (motor_n == NULL) { */
-/*     ESP_LOGE(TAG, "Parameter is null, aborting."); */
-/*     vTaskDelete(NULL); */
-/*     return; */
-/*   } */
-/**/
-/*   TickType_t last_wake_time = xTaskGetTickCount(); */
-/*   const float dt_sec = TASK_UPDATE_MOTOR_PWM_PERIOD_MS / 1000.0f; */
-/**/
-/*   while (true) { */
-/*     ESP_LOGI(TAG, "Current freq: %.2f Hz, Target: %d Hz", */
-/*              motor_n->current_freq_hz, motor_n->target_freq_hz); */
-/**/
-/*     float diff = motor_n->target_freq_hz - motor_n->current_freq_hz; */
-/*     float step = motor_n->speed_hz * dt_sec; */
-/**/
-/*     // Ramp frequency toward target */
-/*     if (fabsf(diff) < step) { */
-/*       motor_n->current_freq_hz = motor_n->target_freq_hz; */
-/*     } else { */
-/*       motor_n->current_freq_hz += (diff > 0) ? step : -step; */
-/*     } */
-/**/
-/*     // Update step count estimate */
-/*     motor_n->step_count += (int)(motor_n->current_freq_hz * dt_sec); */
-/**/
-/*     // Update PWM */
-/*     motor_delete_pwm(motor_n); */
-/*     if (motor_n->current_freq_hz > 0.0f) { */
-/*       motor_create_pwm(motor_n); */
-/*     } */
-/**/
-/*     // Wait for next tick */
-/*     vTaskDelayUntil(&last_wake_time, */
-/*                     pdMS_TO_TICKS(TASK_UPDATE_MOTOR_PWM_PERIOD_MS)); */
-/*   } */
-/* } */
 
 #define MOTOR_CONTROL_TASK_PERIOD_MS 20
 
@@ -219,13 +209,15 @@ void motor_control_task(void *arg) {
              motor->control_vars->pid->Ki * motor->control_vars->pid->integral +
              motor->control_vars->pid->Kd * derivative;
 
-    ESP_LOGI("PID",
-             "error: %.2f - output: %.2f | "
-             "Kp*error = %.2f, Ki* integral = %.2f, Kd * derivative = %.2f",
-
-             error, output, motor->control_vars->pid->Kp * error,
-             motor->control_vars->pid->Ki * motor->control_vars->pid->integral,
-             motor->control_vars->pid->Kd * derivative);
+    /* ESP_LOGI("PID", */
+    /*          "error: %.2f - output: %.2f | " */
+    /*          "Kp*error = %.2f, Ki* integral = %.2f, Kd * derivative = %.2f",
+     */
+    /**/
+    /*          error, output, motor->control_vars->pid->Kp * error, */
+    /*          motor->control_vars->pid->Ki *
+     * motor->control_vars->pid->integral, */
+    /*          motor->control_vars->pid->Kd * derivative); */
 
     // Clamp output to allowed frequency
     if (output > motor->pwm_vars->max_freq)
