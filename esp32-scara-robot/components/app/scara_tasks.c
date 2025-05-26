@@ -151,12 +151,12 @@ void encoder_task(void *arg) {
     accumulated_position += delta;
     last_angle = current_angle;
 
-    ESP_LOGI(encoder->label,
-             "Angle: %u | Delta: %d | Position: %ld | angle_deg: %.2f | "
-             "angle_rad :%.2f",
-             current_angle, delta, accumulated_position,
-             current_angle * 360.0 / 4096 / encoder->gear_ratio,
-             current_angle * 2 * M_PI / encoder->gear_ratio / 4096);
+    /* ESP_LOGI(encoder->label, */
+    /*          "Angle: %u | Delta: %d | Position: %ld | angle_deg: %.2f | " */
+    /*          "angle_rad :%.2f", */
+    /*          current_angle, delta, accumulated_position, */
+    /*          current_angle * 360.0 / 4096 / encoder->gear_ratio, */
+    /*          current_angle * 2 * M_PI / encoder->gear_ratio / 4096); */
 
     encoder->accumulated_steps = accumulated_position;
     vTaskDelay(pdMS_TO_TICKS(25));
@@ -177,7 +177,7 @@ void motor_control_task(void *arg) {
   float output = 0;
   float local_target_freq_hz = 0;
 
-  while (1) {
+  while (!motor->is_calibrated) {
     error = motor->control_vars->encoder_target_pos -
             motor->control_vars->ref_encoder->current_reading;
 
@@ -210,15 +210,13 @@ void motor_control_task(void *arg) {
              motor->control_vars->pid->Ki * motor->control_vars->pid->integral +
              motor->control_vars->pid->Kd * derivative;
 
-    /* ESP_LOGI("PID", */
-    /*          "error: %.2f - output: %.2f | " */
-    /*          "Kp*error = %.2f, Ki* integral = %.2f, Kd * derivative = %.2f",
-     */
-    /**/
-    /*          error, output, motor->control_vars->pid->Kp * error, */
-    /*          motor->control_vars->pid->Ki *
-     * motor->control_vars->pid->integral, */
-    /*          motor->control_vars->pid->Kd * derivative); */
+    ESP_LOGI("PID",
+             "error: %.2f - output: %.2f | "
+             "Kp*error = %.2f, Ki* integral = %.2f, Kd * derivative = %.2f",
+
+             error, output, motor->control_vars->pid->Kp * error,
+             motor->control_vars->pid->Ki * motor->control_vars->pid->integral,
+             motor->control_vars->pid->Kd * derivative);
 
     // Clamp output to allowed frequency
     if (output > motor->pwm_vars->max_freq)
@@ -254,7 +252,8 @@ void switch_task(void *arg) {
 
   while (1) {
     update_switch_val(switch_n);
-    ESP_LOGI("switch_task", "switch current value: %d", switch_n->is_pressed);
+    /* ESP_LOGI("switch_task", "switch current value: %d",
+     * switch_n->is_pressed); */
     vTaskDelay(pdMS_TO_TICKS(25));
   }
 }

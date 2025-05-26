@@ -33,6 +33,7 @@
 #define GPIO_Y_STP GPIO_NUM_25
 #define GPIO_Z_STP GPIO_NUM_17
 
+#include "motor_d.h"
 #include "switch_h.h"
 
 #define GPIO_SWITCH_0 GPIO_NUM_14

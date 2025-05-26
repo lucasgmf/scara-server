@@ -6,5 +6,6 @@
 #include "motor.h"
 #include "pid.h"
 
+void set_motor_for_calibration(motor_t *motor);
 
 #endif // MOTOR_D_H

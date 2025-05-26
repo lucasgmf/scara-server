@@ -167,7 +167,7 @@ switch_t switch_0 = {
 
 void switch_initialization_task() {
   switch_init(&switch_0);
-  switch_task(&switch_0);
+  xTaskCreate(switch_task, "switch_update_task", 4096, &switch_0, 5, NULL);
 }
 //////////////////////////////////
 ////// network/wifi_manager //////
@@ -218,6 +218,7 @@ motor_control_vars control_vars_x = {
     .encoder_target_pos = 0,
     .enable_pid = true,
     .pid = &pid_x,
+    .ref_switch = &switch_0,
 };
 
 motor_t motor_x = {
@@ -228,6 +229,7 @@ motor_t motor_x = {
     .mcpwm_vars = &mcpwm_vars_x,
     .pwm_vars = &pwm_vars_x,
     .control_vars = &control_vars_x,
+    .is_calibrated = false,
 };
 
 void motor_initialization_task() {
@@ -247,6 +249,8 @@ void init_scara() {
   switch_initialization_task();
   encoder_initialization_task();
   motor_initialization_task();
+
+  set_motor_for_calibration(&motor_x);
 
   ESP_LOGI(TAG, "");
   return;

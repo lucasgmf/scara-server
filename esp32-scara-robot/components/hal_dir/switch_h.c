@@ -1,6 +1,5 @@
 #include "switch_h.h"
 
-
 static const char *TAG = "switch_h";
 
 void switch_init(switch_t *switch_n) {
@@ -10,7 +9,7 @@ void switch_init(switch_t *switch_n) {
   }
   gpio_config(switch_n->config);
 }
-
+// TODO: DEBOUNCE SIWTJG OIDUCGNDOCI" G"
 void update_switch_val(switch_t *switch_n) {
   if (switch_n == NULL) {
     ESP_LOGE(TAG, "Parameter is null, aborting.");

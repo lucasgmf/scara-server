@@ -6,6 +6,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "math.h"
+#include "switch_h.h"
 
 #define UPDATE_INTERVAL_MS 100
 typedef struct {
@@ -41,6 +42,7 @@ typedef struct {
 
   bool enable_pid;
   pid_controller_t *pid;
+  switch_t *ref_switch;
 } motor_control_vars;
 
 typedef struct {
@@ -51,6 +53,7 @@ typedef struct {
   motor_mcpwm_vars *mcpwm_vars;
   motor_pwm_vars_t *pwm_vars;
   motor_control_vars *control_vars;
+  bool is_calibrated;
 } motor_t;
 
 void motor_init_dir(motor_t *motor_n);
