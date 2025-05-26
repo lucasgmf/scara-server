@@ -15,8 +15,11 @@
 
 #include "wifi_manager.h"
 
+#include "switch_h.h"
+
 void tcp_server_task(void *arg);
 void encoder_task(void *arg);
 void motor_control_task(void *arg);
+void switch_task(void *arg);
 
 #endif // SCARA_TASKS_H

@@ -108,6 +108,7 @@ void tcp_server_task(void *arg) {
   close(listen_sock);
   vTaskDelete(NULL);
 }
+
 #define MAX_ENCODER_VAL 4096 // 12-bit encoder
 #define HALF_ENCODER_VAL (MAX_ENCODER_VAL / 2)
 
@@ -240,5 +241,20 @@ void motor_control_task(void *arg) {
     // Apply new frequency to motor
     motor_set_frequency(motor, local_target_freq_hz);
     vTaskDelay(pdMS_TO_TICKS(MOTOR_CONTROL_TASK_PERIOD_MS));
+  }
+}
+
+void switch_task(void *arg) {
+  switch_t *switch_n = (switch_t *)arg;
+  if (switch_n == NULL) {
+    ESP_LOGE(TAG, "Parameter is null, aborting.");
+    vTaskDelete(NULL);
+    return;
+  }
+
+  while (1) {
+    update_switch_val(switch_n);
+    ESP_LOGI("switch_task", "switch current value: %d", switch_n->is_pressed);
+    vTaskDelay(pdMS_TO_TICKS(25));
   }
 }

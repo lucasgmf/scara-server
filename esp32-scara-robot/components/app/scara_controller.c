@@ -147,8 +147,30 @@ void encoder_initialization_task() {
   xTaskCreate(encoder_task, "encoder0_task", 4096, &encoder_0, 5, NULL);
 }
 
+///////////////////////////
+////// switch /////////////
+///////////////////////////
+
+gpio_config_t switch_0_io_conf = {
+    .pin_bit_mask = (1ULL << GPIO_SWITCH_0), // Set the GPIO pin
+    .mode = GPIO_MODE_INPUT,                 // Set as input mode
+    .pull_up_en = GPIO_PULLUP_ENABLE,        // Enable pull-up resistor
+    .pull_down_en = GPIO_PULLDOWN_DISABLE,   // Disable pull-down
+    .intr_type = GPIO_INTR_DISABLE,
+};
+
+switch_t switch_0 = {
+    .config = &switch_0_io_conf,
+    .gpio_pin = GPIO_SWITCH_0,
+    .is_pressed = false,
+};
+
+void switch_initialization_task() {
+  switch_init(&switch_0);
+  switch_task(&switch_0);
+}
 //////////////////////////////////
-////// hal_dir/motor /////////////
+////// network/wifi_manager //////
 //////////////////////////////////
 
 // TODO: FIX acceleration in the 0 transition!
@@ -201,8 +223,8 @@ motor_control_vars control_vars_x = {
 motor_t motor_x = {
     .label = MOTOR_X_LABEL,
     .id = MOTOR_X_ID,
-    .gpio_stp = GPIOXSTP,
-    .gpio_dir = GPIOXDIR,
+    .gpio_stp = GPIO_X_STP,
+    .gpio_dir = GPIO_X_DIR,
     .mcpwm_vars = &mcpwm_vars_x,
     .pwm_vars = &pwm_vars_x,
     .control_vars = &control_vars_x,
@@ -222,6 +244,7 @@ void motor_initialization_task() {
 
 void init_scara() {
   /* wifi_initialization_func(); */
+  switch_initialization_task();
   encoder_initialization_task();
   motor_initialization_task();
 
