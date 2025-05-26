@@ -171,3 +171,82 @@ void encoder_task(void *arg) {
 /*                     pdMS_TO_TICKS(TASK_UPDATE_MOTOR_PWM_PERIOD_MS)); */
 /*   } */
 /* } */
+
+#define MOTOR_CONTROL_TASK_PERIOD_MS 20
+
+void motor_control_task(void *arg) {
+  motor_t *motor = (motor_t *)arg;
+  if (motor == NULL) {
+    ESP_LOGE(TAG, "Parameter is null, aborting.");
+    vTaskDelete(NULL);
+    return;
+  }
+
+  float error = 0;
+  float output = 0;
+  float local_target_freq_hz = 0;
+
+  while (1) {
+    error = motor->control_vars->encoder_target_pos -
+            motor->control_vars->ref_encoder->current_reading;
+
+    const float DEAD_BAND_THRESHOLD = 2.0f;            // WARN: define this
+    float dt = MOTOR_CONTROL_TASK_PERIOD_MS / 1000.0f; // Time in seconds
+
+    // Deadband: stop motor and prevent integral windup
+    if (fabsf(error) < DEAD_BAND_THRESHOLD) {
+      motor->control_vars->pid->integral = 0.0f;
+      motor->pwm_vars->target_freq_hz = 0.0f;
+      motor_set_frequency(motor, 0.0f);
+      vTaskDelay(pdMS_TO_TICKS(MOTOR_CONTROL_TASK_PERIOD_MS));
+      continue;
+    }
+
+    // PID calculations
+    motor->control_vars->pid->integral += error * dt;
+
+    // Optional: limit the integral term to prevent windup
+    const float INTEGRAL_LIMIT = 2000.0f * 4;
+    if (motor->control_vars->pid->integral > INTEGRAL_LIMIT)
+      motor->control_vars->pid->integral = INTEGRAL_LIMIT;
+    else if (motor->control_vars->pid->integral < -INTEGRAL_LIMIT)
+      motor->control_vars->pid->integral = -INTEGRAL_LIMIT;
+
+    float derivative = (error - motor->control_vars->pid->prev_error) / dt;
+    motor->control_vars->pid->prev_error = error;
+
+    output = motor->control_vars->pid->Kp * error +
+             motor->control_vars->pid->Ki * motor->control_vars->pid->integral +
+             motor->control_vars->pid->Kd * derivative;
+
+    ESP_LOGI("PID",
+             "error: %.2f - output: %.2f | "
+             "Kp*error = %.2f, Ki* integral = %.2f, Kd * derivative = %.2f",
+
+             error, output, motor->control_vars->pid->Kp * error,
+             motor->control_vars->pid->Ki * motor->control_vars->pid->integral,
+             motor->control_vars->pid->Kd * derivative);
+
+    // Clamp output to allowed frequency
+    if (output > motor->pwm_vars->max_freq)
+      output = motor->pwm_vars->max_freq;
+    if (output < -motor->pwm_vars->max_freq)
+      output = -motor->pwm_vars->max_freq;
+
+    // WARN: maybe this is target_freq_hz??
+    /* loop->output_freq_hz = fabsf(output); */
+
+    /* ESP_LOGI("motor_control_task", "saving target freq to %f", fabs(output));
+     */
+    local_target_freq_hz = fabsf(output);
+
+    // Determine direction
+    bool reverse = output < 0;
+    gpio_set_level(motor->gpio_dir,
+                   motor->pwm_vars->dir_is_reversed ? !reverse : reverse);
+
+    // Apply new frequency to motor
+    motor_set_frequency(motor, local_target_freq_hz);
+    vTaskDelay(pdMS_TO_TICKS(MOTOR_CONTROL_TASK_PERIOD_MS));
+  }
+}

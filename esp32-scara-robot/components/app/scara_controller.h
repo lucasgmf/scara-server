@@ -68,7 +68,6 @@
 #define RX_BUFFER_SIZE 128
 #define ADDR_STR_SIZE 128
 
-
 void init_scara();
 void loop_scara();
 
