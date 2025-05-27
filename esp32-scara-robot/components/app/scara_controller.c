@@ -51,6 +51,28 @@ void wifi_initialization_func() {
   return;
 }
 
+///////////////////////////
+////// switch /////////////
+///////////////////////////
+
+gpio_config_t switch_0_io_conf = {
+    .pin_bit_mask = (1ULL << GPIO_SWITCH_0), // Set the GPIO pin
+    .mode = GPIO_MODE_INPUT,                 // Set as input mode
+    .pull_up_en = GPIO_PULLUP_ENABLE,        // Enable pull-up resistor
+    .pull_down_en = GPIO_PULLDOWN_DISABLE,   // Disable pull-down
+    .intr_type = GPIO_INTR_DISABLE,
+};
+
+switch_t switch_0 = {
+    .config = &switch_0_io_conf,
+    .gpio_pin = GPIO_SWITCH_0,
+    .is_pressed = false,
+};
+
+void switch_initialization_task() {
+  switch_init(&switch_0);
+  xTaskCreate(switch_task, "switch_update_task", 4096, &switch_0, 5, NULL);
+}
 //////////////////////////////////
 ////// drivers/i2c_bus ///////////
 //////////////////////////////////
@@ -125,6 +147,9 @@ static encoder_t encoder_0 = {
     .accumulated_steps = 0,
     .is_inverted = 1,
     .gear_ratio = 62.0 / 18.0,
+    .test_offset = 706,
+    .is_calibrated = false,
+    .switch_n = &switch_0,
 };
 
 void encoder_initialization_task() {
@@ -145,30 +170,10 @@ void encoder_initialization_task() {
 
   ESP_ERROR_CHECK(encoder_init(&encoder_0));
   xTaskCreate(encoder_task, "encoder0_task", 4096, &encoder_0, 5, NULL);
+  xTaskCreate(encoder_try_calibration_task, "encoder0_cal_task", 4096,
+              &encoder_0, 5, NULL);
 }
 
-///////////////////////////
-////// switch /////////////
-///////////////////////////
-
-gpio_config_t switch_0_io_conf = {
-    .pin_bit_mask = (1ULL << GPIO_SWITCH_0), // Set the GPIO pin
-    .mode = GPIO_MODE_INPUT,                 // Set as input mode
-    .pull_up_en = GPIO_PULLUP_ENABLE,        // Enable pull-up resistor
-    .pull_down_en = GPIO_PULLDOWN_DISABLE,   // Disable pull-down
-    .intr_type = GPIO_INTR_DISABLE,
-};
-
-switch_t switch_0 = {
-    .config = &switch_0_io_conf,
-    .gpio_pin = GPIO_SWITCH_0,
-    .is_pressed = false,
-};
-
-void switch_initialization_task() {
-  switch_init(&switch_0);
-  xTaskCreate(switch_task, "switch_update_task", 4096, &switch_0, 5, NULL);
-}
 //////////////////////////////////
 ////// network/wifi_manager //////
 //////////////////////////////////
@@ -229,7 +234,6 @@ motor_t motor_x = {
     .mcpwm_vars = &mcpwm_vars_x,
     .pwm_vars = &pwm_vars_x,
     .control_vars = &control_vars_x,
-    .is_calibrated = false,
 };
 
 void motor_initialization_task() {
@@ -250,8 +254,6 @@ void init_scara() {
   encoder_initialization_task();
   motor_initialization_task();
 
-  set_motor_for_calibration(&motor_x);
-
   ESP_LOGI(TAG, "");
   return;
 }
@@ -262,17 +264,6 @@ void loop_scara() {
     vTaskDelay(10000 / portTICK_PERIOD_MS);
     motor_x.control_vars->encoder_target_pos = 4096 - 250;
     vTaskDelay(10000 / portTICK_PERIOD_MS);
-    /* motor_x.control_vars->pid->Kp = wifi_received_data.Kp; */
-    /* motor_x.control_vars->pid->Ki = wifi_received_data.Ki; */
-    /* motor_x.control_vars->pid->Kd = wifi_received_data.Kd; */
-    /**/
-    /* motor_x.control_vars->encoder_target_pos = */
-    /*     wifi_received_data.target_position_1; */
-    /* vTaskDelay(5000 / portTICK_PERIOD_MS); */
-    /**/
-    /* motor_x.control_vars->encoder_target_pos = */
-    /*     wifi_received_data.target_position_2; */
-    /* vTaskDelay(5000 / portTICK_PERIOD_MS); */
   }
 
   return;
