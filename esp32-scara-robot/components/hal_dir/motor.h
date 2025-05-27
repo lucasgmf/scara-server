@@ -53,7 +53,6 @@ typedef struct {
   motor_mcpwm_vars *mcpwm_vars;
   motor_pwm_vars_t *pwm_vars;
   motor_control_vars *control_vars;
-  bool is_calibrated;
 } motor_t;
 
 void motor_init_dir(motor_t *motor_n);
