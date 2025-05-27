@@ -122,9 +122,6 @@ void encoder_task(void *arg) {
   // first read
   uint16_t last_angle = encoder_read_angle(encoder);
 
-  // to track full rotations
-  int32_t accumulated_position = 0;
-
   uint16_t current_angle;
   int16_t delta;
 
@@ -146,19 +143,36 @@ void encoder_task(void *arg) {
     }
 
     // follow "regra da mão direita"
-    delta *= encoder->is_inverted;
+    delta = delta * (encoder->is_inverted % 2 == 0 ? 1 : -1);
 
-    accumulated_position += delta;
+    encoder->accumulated_steps += delta;
     last_angle = current_angle;
 
-    /* ESP_LOGI(encoder->label, */
-    /*          "Angle: %u | Delta: %d | Position: %ld | angle_deg: %.2f | " */
-    /*          "angle_rad :%.2f", */
-    /*          current_angle, delta, accumulated_position, */
-    /*          current_angle * 360.0 / 4096 / encoder->gear_ratio, */
-    /*          current_angle * 2 * M_PI / encoder->gear_ratio / 4096); */
+    ESP_LOGI(encoder->label, "Raw angle: %u", current_angle);
+    ESP_LOGI(encoder->label,
+             "Angle: %u | Delta: %d | Position: %ld | angle_deg: %.2f | "
+             "angle_rad :%.2f",
+             current_angle, delta, encoder->accumulated_steps,
+             encoder->accumulated_steps * 360.0 / 4096 / encoder->gear_ratio,
+             encoder->accumulated_steps * 2 * M_PI / encoder->gear_ratio / 4096);
 
-    encoder->accumulated_steps = accumulated_position;
+    vTaskDelay(pdMS_TO_TICKS(25));
+  }
+}
+
+void encoder_try_calibration_task(void *arg) {
+  encoder_t *encoder = (encoder_t *)arg;
+  if (encoder == NULL) {
+    ESP_LOGE(TAG, "Parameter is null, aborting.");
+    vTaskDelete(NULL);
+    return;
+  }
+  while (1) {
+    if (encoder->switch_n->is_pressed) {
+      ESP_LOGI("encoder_try_calibration_task", "reseting encoder");
+      encoder->is_calibrated = true;
+      encoder->accumulated_steps = 0;
+    }
     vTaskDelay(pdMS_TO_TICKS(25));
   }
 }
@@ -177,7 +191,13 @@ void motor_control_task(void *arg) {
   float output = 0;
   float local_target_freq_hz = 0;
 
-  while (!motor->is_calibrated) {
+  while (1) {
+
+    if (!motor->control_vars->ref_encoder->is_calibrated) {
+      /* ESP_LOGI("motor_control_task", "encoder is not calibrated"); */
+      vTaskDelay(pdMS_TO_TICKS(MOTOR_CONTROL_TASK_PERIOD_MS));
+      continue;
+    }
     error = motor->control_vars->encoder_target_pos -
             motor->control_vars->ref_encoder->current_reading;
 
@@ -210,13 +230,16 @@ void motor_control_task(void *arg) {
              motor->control_vars->pid->Ki * motor->control_vars->pid->integral +
              motor->control_vars->pid->Kd * derivative;
 
-    ESP_LOGI("PID",
-             "error: %.2f - output: %.2f | "
-             "Kp*error = %.2f, Ki* integral = %.2f, Kd * derivative = %.2f",
+    if (false) {
+      ESP_LOGI("PID",
+               "error: %.2f - output: %.2f | "
+               "Kp*error = %.2f, Ki* integral = %.2f, Kd * derivative = %.2f",
 
-             error, output, motor->control_vars->pid->Kp * error,
-             motor->control_vars->pid->Ki * motor->control_vars->pid->integral,
-             motor->control_vars->pid->Kd * derivative);
+               error, output, motor->control_vars->pid->Kp * error,
+               motor->control_vars->pid->Ki *
+                   motor->control_vars->pid->integral,
+               motor->control_vars->pid->Kd * derivative);
+    }
 
     // Clamp output to allowed frequency
     if (output > motor->pwm_vars->max_freq)
@@ -227,7 +250,8 @@ void motor_control_task(void *arg) {
     // WARN: maybe this is target_freq_hz??
     /* loop->output_freq_hz = fabsf(output); */
 
-    /* ESP_LOGI("motor_control_task", "saving target freq to %f", fabs(output));
+    /* ESP_LOGI("motor_control_task", "saving target freq to %f",
+     * fabs(output));
      */
     local_target_freq_hz = fabsf(output);
 
@@ -252,8 +276,8 @@ void switch_task(void *arg) {
 
   while (1) {
     update_switch_val(switch_n);
-    /* ESP_LOGI("switch_task", "switch current value: %d",
-     * switch_n->is_pressed); */
+    /* ESP_LOGI("switch_task", "value of switch_n is %d", switch_n->is_pressed);
+     */
     vTaskDelay(pdMS_TO_TICKS(25));
   }
 }
