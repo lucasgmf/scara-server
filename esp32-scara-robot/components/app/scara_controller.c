@@ -51,6 +51,28 @@ void wifi_initialization_func() {
   return;
 }
 
+///////////////////////////
+////// switch /////////////
+///////////////////////////
+
+gpio_config_t switch_0_io_conf = {
+    .pin_bit_mask = (1ULL << GPIO_SWITCH_0), // Set the GPIO pin
+    .mode = GPIO_MODE_INPUT,                 // Set as input mode
+    .pull_up_en = GPIO_PULLUP_ENABLE,        // Enable pull-up resistor
+    .pull_down_en = GPIO_PULLDOWN_DISABLE,   // Disable pull-down
+    .intr_type = GPIO_INTR_DISABLE,
+};
+
+switch_t switch_0 = {
+    .config = &switch_0_io_conf,
+    .gpio_pin = GPIO_SWITCH_0,
+    .is_pressed = false,
+};
+
+void switch_initialization_task() {
+  switch_init(&switch_0);
+  xTaskCreate(switch_task, "switch_update_task", 4096, &switch_0, 5, NULL);
+}
 //////////////////////////////////
 ////// drivers/i2c_bus ///////////
 //////////////////////////////////
@@ -121,18 +143,13 @@ static encoder_t encoder_0 = {
     .reg_angle_mask = ENCODER_ANGLE_MASK,
     .offset = 0,
     .reverse = false,
-};
-
-static encoder_t encoder_1 = {
-    .label = "Encoder 1",
-    .i2c_master = &i2c_master_conf,
-    .i2c_slave = &i2c_slave_conf_encoder_1,
-    .i2c_tca = &i2c_slave_conf_tca,
-    .tca_channel = 1,
-    .reg_angle_msb = ENCODER_MSB_ANGLE_REG,
-    .reg_angle_mask = ENCODER_ANGLE_MASK,
-    .offset = 0,
-    .reverse = false,
+    .current_reading = 0,
+    .accumulated_steps = 0,
+    .is_inverted = 1,
+    .gear_ratio = 62.0 / 18.0,
+    .test_offset = 706,
+    .is_calibrated = false,
+    .switch_n = &switch_0,
 };
 
 void encoder_initialization_task() {
@@ -153,79 +170,89 @@ void encoder_initialization_task() {
 
   ESP_ERROR_CHECK(encoder_init(&encoder_0));
   xTaskCreate(encoder_task, "encoder0_task", 4096, &encoder_0, 5, NULL);
-
-  ESP_ERROR_CHECK(
-      tca_select_channel(encoder_1.tca_channel, encoder_1.i2c_tca->dev_handle));
-  ESP_ERROR_CHECK(i2c_master_bus_add_device(
-      *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_1.dev_cfg,
-      i2c_slave_conf_encoder_1.dev_handle));
-
-  ESP_ERROR_CHECK(encoder_init(&encoder_1));
-
-  xTaskCreate(encoder_task, "encoder1_task", 4096, &encoder_1, 5, NULL);
+  xTaskCreate(encoder_try_calibration_task, "encoder0_cal_task", 4096,
+              &encoder_0, 5, NULL);
 }
 
 //////////////////////////////////
-////// hal_dir/motor /////////////
+////// network/wifi_manager //////
 //////////////////////////////////
 
+// TODO: FIX acceleration in the 0 transition!
+
+#define MOTOR_X_LABEL "Motor x"
+#define MOTOR_X_ID 0
+
+#define MCPWM_MAX_PERIOD_TICKS 60000 // WARN: maybe change this
+#define MCPWM_MIN_PERIOD_TICKS 5
+#define PWM_RESOLUTION_HZ 1000000
+#define PWM_MAX_FREQ_HZ 1100
+#define PWM_MIN_FREQ_HZ 1
+#define PWM_MAX_ACCEL_HZ 3000
+
+motor_mcpwm_vars mcpwm_vars_x = {
+    .group_unit = 0,
+    .timer = 0,
+    .operator= 0,
+    .comparator = 0,
+    .generator = 0,
+    .esp_timer_handle = 0,
+    .mcpwm_min_period_ticks = MCPWM_MIN_PERIOD_TICKS,
+    .mcpwm_max_period_ticks = MCPWM_MAX_PERIOD_TICKS,
+    .pwm_resolution_hz = PWM_RESOLUTION_HZ,
+};
+
+motor_pwm_vars_t pwm_vars_x = {
+    .step_count = 0,
+    .max_freq = PWM_MAX_FREQ_HZ,
+    .min_freq = PWM_MIN_FREQ_HZ,
+    .max_accel = PWM_MAX_ACCEL_HZ,
+    .current_freq_hz = 0,
+    .target_freq_hz = 0,
+    .dir_is_reversed = false,
+};
+
+pid_controller_t pid_x = {
+    .Kp = 1,      // 1
+    .Ki = 0.0025, // 0.01
+    .Kd = 0.2,    // 0.2
+};
+
+motor_control_vars control_vars_x = {
+    .ref_encoder = &encoder_0,
+    .encoder_target_pos = 0,
+    .enable_pid = true,
+    .pid = &pid_x,
+    .ref_switch = &switch_0,
+};
+
 motor_t motor_x = {
-    .id = 0,
-    .gpio_stp = GPIOXSTP,
-    .gpio_dir = GPIOXDIR,
-    .step_count = 0,
-    .mcpwm_unit = 0,
-    .mcpwm_timer = 0,
-    .mcpwm_opr = 0,
-    .move_ms = 0,
-    .current_freq_hz = 200,
-    .target_freq_hz = 0,
-    .speed_hz = 800,
-};
-
-motor_t motor_y = {
-    .id = 1,
-    .gpio_stp = GPIOYSTP,
-    .gpio_dir = GPIOYDIR,
-    .step_count = 0,
-    .mcpwm_unit = 1,
-    .mcpwm_timer = 0,
-    .mcpwm_opr = 0,
-    .move_ms = 0,
-    .current_freq_hz = 200,
-    .target_freq_hz = 0,
-    .speed_hz = 800, // variation speed
-};
-
-static pid_controller_t pid1 = {
-    .Kp = 1.2f,
-    .Ki = 0.001f,
-    .Kd = 0.1f,
-    .output_limit = 500.0f,
-};
-
-static motor_control_loop_t loop1 = {
-    /* .encoder = &encoder1, */
-    NULL,
-    /* .motor = &motor_x, */
-    .pid = &pid1,
-    .target_position = 1200.0f,
-    .max_output_freq_hz = 1100.0f,
-    .direction_reversed = false,
+    .label = MOTOR_X_LABEL,
+    .id = MOTOR_X_ID,
+    .gpio_stp = GPIO_X_STP,
+    .gpio_dir = GPIO_X_DIR,
+    .mcpwm_vars = &mcpwm_vars_x,
+    .pwm_vars = &pwm_vars_x,
+    .control_vars = &control_vars_x,
 };
 
 void motor_initialization_task() {
   motor_init_dir(&motor_x);
   motor_create_pwm(&motor_x);
 
-  xTaskCreate(motor_control_task, "motor_ctrl", 4096, &loop1, 5, NULL);
+  xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_x, 5, NULL);
   return;
 }
 
+//////////////////////////////////
+////// Call functions ////////////
+//////////////////////////////////
+
 void init_scara() {
   /* wifi_initialization_func(); */
+  switch_initialization_task();
   encoder_initialization_task();
-  /* motor_initialization_task(); */
+  motor_initialization_task();
 
   ESP_LOGI(TAG, "");
   return;
@@ -233,15 +260,10 @@ void init_scara() {
 
 void loop_scara() {
   while (1) {
-    /* ESP_LOGW(TAG, "changing target_position to %d", */
-    /*          esp_net_conf.rec_data->target_position_1); */
-    /* loop1.target_position = esp_net_conf.rec_data->target_position_1; */
-    /* vTaskDelay(5000 / portTICK_PERIOD_MS); */
-    /**/
-    /* ESP_LOGW(TAG, "changing target_position to %d", */
-    /*          esp_net_conf.rec_data->target_position_2); */
-    /* loop1.target_position = esp_net_conf.rec_data->target_position_2; */
-    vTaskDelay(5000 / portTICK_PERIOD_MS);
+    motor_x.control_vars->encoder_target_pos = 0 + 250;
+    vTaskDelay(10000 / portTICK_PERIOD_MS);
+    motor_x.control_vars->encoder_target_pos = 4096 - 250;
+    vTaskDelay(10000 / portTICK_PERIOD_MS);
   }
 
   return;

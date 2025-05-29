@@ -9,102 +9,6 @@
 
 static const char *TAG = "scara_tasks";
 
-#define TASK_UPDATE_MOTOR_PWM_PERIOD_MS 20
-
-void task_update_motor_pwm(void *arg) {
-  motor_t *motor_n = (motor_t *)arg;
-  if (motor_n == NULL) {
-    ESP_LOGE(TAG, "Parameter is null, aborting.");
-    vTaskDelete(NULL);
-    return;
-  }
-
-  TickType_t last_wake_time = xTaskGetTickCount();
-  const float dt_sec = TASK_UPDATE_MOTOR_PWM_PERIOD_MS / 1000.0f;
-
-  while (true) {
-    ESP_LOGI(TAG, "Current freq: %.2f Hz, Target: %d Hz",
-             motor_n->current_freq_hz, motor_n->target_freq_hz);
-
-    float diff = motor_n->target_freq_hz - motor_n->current_freq_hz;
-    float step = motor_n->speed_hz * dt_sec;
-
-    // Ramp frequency toward target
-    if (fabsf(diff) < step) {
-      motor_n->current_freq_hz = motor_n->target_freq_hz;
-    } else {
-      motor_n->current_freq_hz += (diff > 0) ? step : -step;
-    }
-
-    // Update step count estimate
-    motor_n->step_count += (int)(motor_n->current_freq_hz * dt_sec);
-
-    // Update PWM
-    motor_delete_pwm(motor_n);
-    if (motor_n->current_freq_hz > 0.0f) {
-      motor_create_pwm(motor_n);
-    }
-
-    // Wait for next tick
-    vTaskDelayUntil(&last_wake_time,
-                    pdMS_TO_TICKS(TASK_UPDATE_MOTOR_PWM_PERIOD_MS));
-  }
-}
-
-
-#define MOTOR_CONTROL_TASK_PERIOD_MS 1000
-
-void motor_control_task(void *arg) {
-  motor_control_loop_t *loop = (motor_control_loop_t *)arg;
-  const TickType_t dt_ticks = pdMS_TO_TICKS(MOTOR_CONTROL_TASK_PERIOD_MS);
-  const float dt_sec = 0.02f;
-
-  while (1) {
-    /* uint16_t raw = encoder_read_angle(loop->encoder); */
-    uint16_t raw = 0;
-    loop->current_position = (float)raw;
-
-    float error = loop->target_position - loop->current_position;
-
-    ESP_LOGI("motor_debug", "Target: %.2f, Current: %.2f, Error: %.2f",
-             loop->target_position, loop->current_position, error);
-    // Deadband: if error is small, stop the motor
-    const float DEAD_BAND_THRESHOLD =
-        2.0f; // Adjust as needed based on your encoder units
-    if (fabsf(error) < DEAD_BAND_THRESHOLD) {
-      loop->pid->integral = 0; // Optional: prevent integral windup
-      loop->output_freq_hz = 0;
-      motor_set_frequency(loop->motor, 0);
-      vTaskDelay(dt_ticks);
-      continue;
-    }
-    loop->pid->integral += error * dt_sec;
-    float derivative = (error - loop->pid->prev_error) / dt_sec;
-    loop->pid->prev_error = error;
-
-    float output = loop->pid->Kp * error + loop->pid->Ki * loop->pid->integral +
-                   loop->pid->Kd * derivative;
-
-    // Clamp output to allowed frequency
-    if (output > loop->max_output_freq_hz)
-      output = loop->max_output_freq_hz;
-    if (output < -loop->max_output_freq_hz)
-      output = -loop->max_output_freq_hz;
-
-    loop->output_freq_hz = fabsf(output);
-
-    // Determine direction
-    bool reverse = output < 0;
-    gpio_set_level(loop->motor->gpio_dir,
-                   loop->direction_reversed ? !reverse : reverse);
-
-    // Apply new frequency to motor
-    motor_set_frequency(loop->motor, (int)loop->output_freq_hz);
-
-    vTaskDelay(dt_ticks);
-  }
-}
-
 bool handle_error(bool condition, const char *message, int sock_to_close) {
   if (condition) {
     ESP_LOGE(TAG, "%s: errno %d", message, errno);
@@ -205,6 +109,9 @@ void tcp_server_task(void *arg) {
   vTaskDelete(NULL);
 }
 
+#define MAX_ENCODER_VAL 4096 // 12-bit encoder
+#define HALF_ENCODER_VAL (MAX_ENCODER_VAL / 2)
+
 void encoder_task(void *arg) {
   encoder_t *encoder = (encoder_t *)arg;
   if (encoder == NULL) {
@@ -212,16 +119,165 @@ void encoder_task(void *arg) {
     vTaskDelete(NULL);
     return;
   }
+  // first read
+  uint16_t last_angle = encoder_read_angle(encoder);
+
+  uint16_t current_angle;
+  int16_t delta;
 
   while (1) {
-    uint16_t angle = encoder_read_angle(encoder);
 
-    if (angle != 0xFFFF) {
-      ESP_LOGI(encoder->label, "Angle: %u", angle);
-    } else {
+    current_angle = encoder_read_angle(encoder);
+
+    if (current_angle == 0xFFFF) {
       ESP_LOGW(encoder->label, "Failed to read angle");
     }
 
-    vTaskDelay(pdMS_TO_TICKS(100));
+    delta = (int16_t)current_angle - (int16_t)last_angle;
+
+    // Handle wraparound (shortest path)
+    if (delta > HALF_ENCODER_VAL) {
+      delta -= MAX_ENCODER_VAL;
+    } else if (delta < -HALF_ENCODER_VAL) {
+      delta += MAX_ENCODER_VAL;
+    }
+
+    // follow "regra da mão direita"
+    delta = delta * (encoder->is_inverted % 2 == 0 ? 1 : -1);
+
+    encoder->accumulated_steps += delta;
+    last_angle = current_angle;
+
+    ESP_LOGI(encoder->label, "Raw angle: %u", current_angle);
+    ESP_LOGI(encoder->label,
+             "Angle: %u | Delta: %d | Position: %ld | angle_deg: %.2f | "
+             "angle_rad :%.2f",
+             current_angle, delta, encoder->accumulated_steps,
+             encoder->accumulated_steps * 360.0 / 4096 / encoder->gear_ratio,
+             encoder->accumulated_steps * 2 * M_PI / encoder->gear_ratio / 4096);
+
+    vTaskDelay(pdMS_TO_TICKS(25));
+  }
+}
+
+void encoder_try_calibration_task(void *arg) {
+  encoder_t *encoder = (encoder_t *)arg;
+  if (encoder == NULL) {
+    ESP_LOGE(TAG, "Parameter is null, aborting.");
+    vTaskDelete(NULL);
+    return;
+  }
+  while (1) {
+    if (encoder->switch_n->is_pressed) {
+      ESP_LOGI("encoder_try_calibration_task", "reseting encoder");
+      encoder->is_calibrated = true;
+      encoder->accumulated_steps = 0;
+    }
+    vTaskDelay(pdMS_TO_TICKS(25));
+  }
+}
+
+#define MOTOR_CONTROL_TASK_PERIOD_MS 20
+
+void motor_control_task(void *arg) {
+  motor_t *motor = (motor_t *)arg;
+  if (motor == NULL) {
+    ESP_LOGE(TAG, "Parameter is null, aborting.");
+    vTaskDelete(NULL);
+    return;
+  }
+
+  float error = 0;
+  float output = 0;
+  float local_target_freq_hz = 0;
+
+  while (1) {
+
+    if (!motor->control_vars->ref_encoder->is_calibrated) {
+      /* ESP_LOGI("motor_control_task", "encoder is not calibrated"); */
+      vTaskDelay(pdMS_TO_TICKS(MOTOR_CONTROL_TASK_PERIOD_MS));
+      continue;
+    }
+    error = motor->control_vars->encoder_target_pos -
+            motor->control_vars->ref_encoder->current_reading;
+
+    const float DEAD_BAND_THRESHOLD = 2.0f;            // WARN: define this
+    float dt = MOTOR_CONTROL_TASK_PERIOD_MS / 1000.0f; // Time in seconds
+
+    // Deadband: stop motor and prevent integral windup
+    if (fabsf(error) < DEAD_BAND_THRESHOLD) {
+      motor->control_vars->pid->integral = 0.0f;
+      motor->pwm_vars->target_freq_hz = 0.0f;
+      motor_set_frequency(motor, 0.0f);
+      vTaskDelay(pdMS_TO_TICKS(MOTOR_CONTROL_TASK_PERIOD_MS));
+      continue;
+    }
+
+    // PID calculations
+    motor->control_vars->pid->integral += error * dt;
+
+    // Optional: limit the integral term to prevent windup
+    const float INTEGRAL_LIMIT = 2000.0f * 4;
+    if (motor->control_vars->pid->integral > INTEGRAL_LIMIT)
+      motor->control_vars->pid->integral = INTEGRAL_LIMIT;
+    else if (motor->control_vars->pid->integral < -INTEGRAL_LIMIT)
+      motor->control_vars->pid->integral = -INTEGRAL_LIMIT;
+
+    float derivative = (error - motor->control_vars->pid->prev_error) / dt;
+    motor->control_vars->pid->prev_error = error;
+
+    output = motor->control_vars->pid->Kp * error +
+             motor->control_vars->pid->Ki * motor->control_vars->pid->integral +
+             motor->control_vars->pid->Kd * derivative;
+
+    if (false) {
+      ESP_LOGI("PID",
+               "error: %.2f - output: %.2f | "
+               "Kp*error = %.2f, Ki* integral = %.2f, Kd * derivative = %.2f",
+
+               error, output, motor->control_vars->pid->Kp * error,
+               motor->control_vars->pid->Ki *
+                   motor->control_vars->pid->integral,
+               motor->control_vars->pid->Kd * derivative);
+    }
+
+    // Clamp output to allowed frequency
+    if (output > motor->pwm_vars->max_freq)
+      output = motor->pwm_vars->max_freq;
+    if (output < -motor->pwm_vars->max_freq)
+      output = -motor->pwm_vars->max_freq;
+
+    // WARN: maybe this is target_freq_hz??
+    /* loop->output_freq_hz = fabsf(output); */
+
+    /* ESP_LOGI("motor_control_task", "saving target freq to %f",
+     * fabs(output));
+     */
+    local_target_freq_hz = fabsf(output);
+
+    // Determine direction
+    bool reverse = output < 0;
+    gpio_set_level(motor->gpio_dir,
+                   motor->pwm_vars->dir_is_reversed ? !reverse : reverse);
+
+    // Apply new frequency to motor
+    motor_set_frequency(motor, local_target_freq_hz);
+    vTaskDelay(pdMS_TO_TICKS(MOTOR_CONTROL_TASK_PERIOD_MS));
+  }
+}
+
+void switch_task(void *arg) {
+  switch_t *switch_n = (switch_t *)arg;
+  if (switch_n == NULL) {
+    ESP_LOGE(TAG, "Parameter is null, aborting.");
+    vTaskDelete(NULL);
+    return;
+  }
+
+  while (1) {
+    update_switch_val(switch_n);
+    /* ESP_LOGI("switch_task", "value of switch_n is %d", switch_n->is_pressed);
+     */
+    vTaskDelay(pdMS_TO_TICKS(25));
   }
 }

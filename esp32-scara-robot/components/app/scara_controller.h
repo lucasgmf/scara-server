@@ -26,14 +26,17 @@
 #define MOTOR_Y 2
 #define MOTOR_Z 3
 
-#define GPIOXDIR GPIO_NUM_16
-#define GPIOYDIR GPIO_NUM_27
-#define GPIOZDIR GPIO_NUM_14
-#define GPIOXSTP GPIO_NUM_26
-#define GPIOYSTP GPIO_NUM_25
-#define GPIOZSTP GPIO_NUM_17
+#define GPIO_X_DIR GPIO_NUM_16
+#define GPIO_Y_DIR GPIO_NUM_27
+#define GPIO_Z_DIR GPIO_NUM_14
+#define GPIO_X_STP GPIO_NUM_26
+#define GPIO_Y_STP GPIO_NUM_25
+#define GPIO_Z_STP GPIO_NUM_17
 
+#include "motor_d.h"
 #include "switch_h.h"
+
+#define GPIO_SWITCH_0 GPIO_NUM_14
 
 ///////////////////////////////////////////////
 /////////////////// DRIVERS ///////////////////
@@ -67,7 +70,6 @@
 
 #define RX_BUFFER_SIZE 128
 #define ADDR_STR_SIZE 128
-
 
 void init_scara();
 void loop_scara();

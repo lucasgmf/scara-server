@@ -15,10 +15,12 @@
 
 #include "wifi_manager.h"
 
-void task_update_motor_pwm(void *arg);
-void motor_control_task(void *arg);
-void tcp_server_task(void *arg);
+#include "switch_h.h"
+
 void tcp_server_task(void *arg);
 void encoder_task(void *arg);
+void motor_control_task(void *arg);
+void switch_task(void *arg);
+void encoder_try_calibration_task(void *arg);
 
 #endif // SCARA_TASKS_H

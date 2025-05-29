@@ -9,6 +9,8 @@
 #include "i2c_bus.h"
 #include "i2c_multiplexer.h"
 
+#include "switch_h.h"
+
 typedef struct {
   const char *label;
   i2c_master_config_t *i2c_master;
@@ -18,8 +20,15 @@ typedef struct {
   uint8_t reg_angle_msb;
   uint16_t reg_angle_mask;
   // additional ...
-  int offset;   // offset from 0
+  float offset; // offset from 0
   bool reverse; // TODO: change this later
+  float current_reading;
+  int32_t accumulated_steps;
+  bool is_inverted;
+  bool is_calibrated;
+  float gear_ratio;
+  int test_offset; // WARN: test
+  switch_t *switch_n;
 } encoder_t;
 
 esp_err_t encoder_init(encoder_t *encoder);

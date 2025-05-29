@@ -2,13 +2,15 @@
 #define SWITCH_H_H
 
 #include "driver/gpio.h"
+#include "esp_log.h"
 
 typedef struct {
-  gpio_num_t gpio_port;
-  bool value;
+  gpio_config_t *config;
+  gpio_num_t gpio_pin;
+  bool is_pressed;
 } switch_t;
 
-void init_switch(switch_t *switch_n, gpio_config_t *io_conf);
+void switch_init(switch_t *switch_n);
 void update_switch_val(switch_t *switch_n);
 
 #endif // SWITCH_H_H
