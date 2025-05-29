@@ -131,6 +131,7 @@ void encoder_task(void *arg) {
 
     if (current_angle == 0xFFFF) {
       ESP_LOGW(encoder->label, "Failed to read angle");
+      continue;
     }
 
     delta = (int16_t)current_angle - (int16_t)last_angle;
@@ -154,9 +155,10 @@ void encoder_task(void *arg) {
              "angle_rad :%.2f",
              current_angle, delta, encoder->accumulated_steps,
              encoder->accumulated_steps * 360.0 / 4096 / encoder->gear_ratio,
-             encoder->accumulated_steps * 2 * M_PI / encoder->gear_ratio / 4096);
+             encoder->accumulated_steps * 2 * M_PI / encoder->gear_ratio /
+                 4096);
 
-    vTaskDelay(pdMS_TO_TICKS(25));
+    vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
 

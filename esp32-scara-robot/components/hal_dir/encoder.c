@@ -21,39 +21,46 @@ esp_err_t encoder_init(encoder_t *encoder) {
 uint16_t encoder_read_angle(encoder_t *encoder) {
   uint8_t reg = encoder->reg_angle_msb;
   uint8_t data[2];
+  esp_err_t ret;
 
   if (xSemaphoreTake(*encoder->i2c_master->i2c_mutex,
                      encoder->i2c_master->timeout_ticks) != pdTRUE) {
-    ESP_LOGE(encoder->label, "Mutex timeout");
+    ESP_LOGW(encoder->label, "Failed to take I2C mutex");
     return 0xFFFF;
   }
 
-  esp_err_t ret =
-      tca_select_channel(encoder->tca_channel, encoder->i2c_tca->dev_handle);
-  if (ret != ESP_OK) {
-    ESP_LOGE(encoder->label, "TCA channel select failed: %s",
-             esp_err_to_name(ret));
+  // ---- I2C access section begins ----
+  do {
+    ret =
+        tca_select_channel(encoder->tca_channel, encoder->i2c_tca->dev_handle);
+    if (ret != ESP_OK) {
+      ESP_LOGE(encoder->label, "Failed to select TCA channel: %s",
+               esp_err_to_name(ret));
+      break; // Go to cleanup
+    }
+
+    ret = i2c_master_transmit_receive(*encoder->i2c_slave->dev_handle, &reg, 1,
+                                      data, 2,
+                                      encoder->i2c_master->timeout_ticks);
+    if (ret != ESP_OK) {
+      ESP_LOGE(encoder->label, "Read error: %s", esp_err_to_name(ret));
+      break; // Go to cleanup
+    }
+
+    // Success
+    uint16_t raw = ((data[0] << 8) | data[1]) & encoder->reg_angle_mask;
+    if (encoder->reverse)
+      raw = encoder->reg_angle_mask - raw;
+    raw = (raw + (uint16_t)encoder->offset) & encoder->reg_angle_mask;
+
+    encoder->current_reading = raw;
+
     xSemaphoreGive(*encoder->i2c_master->i2c_mutex);
-    return 0xFFFF;
-  }
+    return raw;
 
-  ret =
-      i2c_master_transmit_receive(*encoder->i2c_slave->dev_handle, &reg, 1,
-                                  data, 2, encoder->i2c_master->timeout_ticks);
+  } while (0);
 
+  // ---- I2C access failed ----
   xSemaphoreGive(*encoder->i2c_master->i2c_mutex);
-
-  if (ret != ESP_OK) {
-    ESP_LOGE(encoder->label, "Read error: %s", esp_err_to_name(ret));
-    return 0xFFFF;
-  }
-
-  uint16_t raw = ((data[0] << 8) | data[1]) & encoder->reg_angle_mask;
-  if (encoder->reverse)
-    raw = encoder->reg_angle_mask - raw;
-  raw = (raw + (uint16_t)encoder->offset) & encoder->reg_angle_mask;
-
-  /* ESP_LOGI("encoder_read_angle", "updating encoder value to %d", raw); */
-  encoder->current_reading = raw;
-  return raw;
+  return 0xFFFF;
 }
