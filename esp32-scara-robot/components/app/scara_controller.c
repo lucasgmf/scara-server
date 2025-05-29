@@ -98,6 +98,7 @@ static i2c_master_config_t i2c_master_conf = {
 
 static i2c_master_dev_handle_t encoder_0_handle;
 static i2c_master_dev_handle_t encoder_1_handle;
+static i2c_master_dev_handle_t encoder_2_handle;
 static i2c_master_dev_handle_t tca_handle;
 
 static i2c_device_config_t encoder_0_cfg = {
@@ -107,6 +108,11 @@ static i2c_device_config_t encoder_0_cfg = {
 };
 
 static i2c_device_config_t encoder_1_cfg = {
+    .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+    .device_address = I2C_ADDR_AS5600,
+    .scl_speed_hz = I2C_DEVICE_SPEED_HZ,
+};
+static i2c_device_config_t encoder_2_cfg = {
     .dev_addr_length = I2C_ADDR_BIT_LEN_7,
     .device_address = I2C_ADDR_AS5600,
     .scl_speed_hz = I2C_DEVICE_SPEED_HZ,
@@ -126,6 +132,11 @@ static i2c_slave_bus_params i2c_slave_conf_encoder_0 = {
 static i2c_slave_bus_params i2c_slave_conf_encoder_1 = {
     .dev_cfg = &encoder_1_cfg,
     .dev_handle = &encoder_1_handle,
+};
+
+static i2c_slave_bus_params i2c_slave_conf_encoder_2 = {
+    .dev_cfg = &encoder_2_cfg,
+    .dev_handle = &encoder_2_handle,
 };
 
 static i2c_slave_bus_params i2c_slave_conf_tca = {
@@ -159,6 +170,26 @@ static encoder_t encoder_1 = {
     .i2c_slave = &i2c_slave_conf_encoder_1,
     .i2c_tca = &i2c_slave_conf_tca,
     .tca_channel = 1,
+    .reg_angle_msb = ENCODER_MSB_ANGLE_REG,
+    .reg_angle_mask = ENCODER_ANGLE_MASK,
+    .offset = 0,
+    .reverse = false,
+    .current_reading = 0,
+    .accumulated_steps = 0,
+    .is_inverted = 1,
+    .gear_ratio = 62.0 / 18.0,
+    .test_offset = 706,
+    .is_calibrated = false,
+    .i2c_mutex = &i2c_mutex,
+    /* .switch_n = &switch_0, */
+};
+
+static encoder_t encoder_2 = {
+    .label = "Encoder 2",
+    .i2c_master = &i2c_master_conf,
+    .i2c_slave = &i2c_slave_conf_encoder_2,
+    .i2c_tca = &i2c_slave_conf_tca,
+    .tca_channel = 2,
     .reg_angle_msb = ENCODER_MSB_ANGLE_REG,
     .reg_angle_mask = ENCODER_ANGLE_MASK,
     .offset = 0,
@@ -206,8 +237,15 @@ void encoder_initialization_task() {
       i2c_slave_conf_encoder_1.dev_handle));
   ESP_ERROR_CHECK(encoder_init(&encoder_1));
 
+  ESP_ERROR_CHECK(
+      tca_select_channel(encoder_2.tca_channel, encoder_2.i2c_tca->dev_handle));
+  ESP_ERROR_CHECK(i2c_master_bus_add_device(
+      *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_2.dev_cfg,
+      i2c_slave_conf_encoder_2.dev_handle));
+  ESP_ERROR_CHECK(encoder_init(&encoder_2));
   xTaskCreate(encoder_task, "encoder0_task", 4096, &encoder_0, 5, NULL);
   xTaskCreate(encoder_task, "encoder1_task", 4096, &encoder_1, 5, NULL);
+  xTaskCreate(encoder_task, "encoder2_task", 4096, &encoder_2, 5, NULL);
   /* xTaskCreate(encoder_try_calibration_task, "encoder0_cal_task", 4096, */
   /*             &encoder_0, 5, NULL); */
 }
