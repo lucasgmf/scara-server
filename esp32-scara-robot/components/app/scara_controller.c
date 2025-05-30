@@ -386,10 +386,11 @@ void loop_scara() {
     /* vTaskDelay(10000 / portTICK_PERIOD_MS); */
     /* motor_x.control_vars->encoder_target_pos = 4096 - 250; */
     /* vTaskDelay(10000 / portTICK_PERIOD_MS); */
-    ESP_LOGI(encoder_0.label, "value: %f", encoder_0.current_reading);
-    ESP_LOGI(encoder_1.label, "value: %f", encoder_1.current_reading);
-    ESP_LOGI(encoder_2.label, "value: %f", encoder_2.current_reading);
-    ESP_LOGI(encoder_3.label, "value: %f", encoder_3.current_reading);
+    /* ESP_LOGI(encoder_0.label, "value: %f", encoder_0.current_reading); */
+    /* ESP_LOGI(encoder_1.label, "value: %f", encoder_1.current_reading); */
+    /* ESP_LOGI(encoder_2.label, "value: %f", encoder_2.current_reading); */
+    /* ESP_LOGI(encoder_3.label, "value: %f", encoder_3.current_reading); */
+    ESP_LOGI("", "\n");
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 
