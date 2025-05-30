@@ -2,7 +2,7 @@
 
 esp_err_t tca_select_channel(uint8_t channel,
                              i2c_master_dev_handle_t *tca_handle) {
-  if (tca_handle == NULL || *tca_handle == NULL) {
+  if (*tca_handle == NULL) {
     ESP_LOGE("tca_select_channel", "Invalid I2C handle");
     return ESP_ERR_INVALID_ARG;
   }

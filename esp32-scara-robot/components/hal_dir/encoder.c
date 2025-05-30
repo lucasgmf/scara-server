@@ -23,7 +23,13 @@ uint16_t encoder_read_angle(encoder_t *encoder) {
   uint8_t data[2];
   esp_err_t ret;
 
-  if (xSemaphoreTake(*encoder->i2c_master->i2c_mutex,
+  if (!encoder || !encoder->i2c_master || !encoder->i2c_master->i2c_mutex) {
+    ESP_LOGE("encoder",
+             "Invalid encoder pointer or uninitialized i2c_master/i2c_mutex");
+    return 0xFFFF;
+  }
+
+  if (xSemaphoreTake(encoder->i2c_master->i2c_mutex,
                      encoder->i2c_master->timeout_ticks) != pdTRUE) {
     ESP_LOGW(encoder->label, "Failed to take I2C mutex");
     return 0xFFFF;
@@ -55,12 +61,12 @@ uint16_t encoder_read_angle(encoder_t *encoder) {
 
     encoder->current_reading = raw;
 
-    xSemaphoreGive(*encoder->i2c_master->i2c_mutex);
+    xSemaphoreGive(encoder->i2c_master->i2c_mutex);
     return raw;
 
   } while (0);
 
   // ---- I2C access failed ----
-  xSemaphoreGive(*encoder->i2c_master->i2c_mutex);
+  xSemaphoreGive(encoder->i2c_master->i2c_mutex);
   return 0xFFFF;
 }

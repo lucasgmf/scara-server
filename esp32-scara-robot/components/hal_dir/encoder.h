@@ -29,7 +29,7 @@ typedef struct {
   float gear_ratio;
   int test_offset; // WARN: test
   switch_t *switch_n;
-  SemaphoreHandle_t *i2c_mutex;
+  /* SemaphoreHandle_t *i2c_mutex; */
 } encoder_t;
 
 esp_err_t encoder_init(encoder_t *encoder);
