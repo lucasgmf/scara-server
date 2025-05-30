@@ -77,7 +77,7 @@ void switch_initialization_task() {
 ////// drivers/i2c_bus ///////////
 //////////////////////////////////
 
-static SemaphoreHandle_t i2c_mutex;
+static SemaphoreHandle_t i2c_mutex = NULL;
 
 static i2c_master_bus_handle_t master_bus_handle;
 static i2c_master_bus_config_t master_bus_config = {
@@ -92,7 +92,7 @@ static i2c_master_bus_config_t master_bus_config = {
 static i2c_master_config_t i2c_master_conf = {
     .bus_cfg = &master_bus_config,
     .bus_handle = &master_bus_handle,
-    .i2c_mutex = &i2c_mutex,
+    /* .i2c_mutex = &i2c_mutex, */
     .timeout_ticks = portMAX_DELAY,
 };
 
@@ -171,7 +171,6 @@ static encoder_t encoder_0 = {
     .test_offset = 706,
     .is_calibrated = false,
     .switch_n = &switch_0,
-    .i2c_mutex = &i2c_mutex,
 };
 
 static encoder_t encoder_1 = {
@@ -190,8 +189,6 @@ static encoder_t encoder_1 = {
     .gear_ratio = 62.0 / 18.0,
     .test_offset = 706,
     .is_calibrated = false,
-    .i2c_mutex = &i2c_mutex,
-    /* .switch_n = &switch_0, */
 };
 
 static encoder_t encoder_2 = {
@@ -210,7 +207,7 @@ static encoder_t encoder_2 = {
     .gear_ratio = 62.0 / 18.0,
     .test_offset = 706,
     .is_calibrated = false,
-    .i2c_mutex = &i2c_mutex,
+    /* .i2c_mutex = &i2c_mutex, */
     /* .switch_n = &switch_0, */
 };
 
@@ -230,12 +227,21 @@ static encoder_t encoder_3 = {
     .gear_ratio = 62.0 / 18.0,
     .test_offset = 706,
     .is_calibrated = false,
-    .i2c_mutex = &i2c_mutex,
+    /* .i2c_mutex = &i2c_mutex, */
     /* .switch_n = &switch_0, */
 };
 
+#include "stdlib.h"
+
 void encoder_initialization_task() {
+
   i2c_mutex = xSemaphoreCreateMutex();
+  if (i2c_mutex == NULL) {
+    ESP_LOGE(TAG, "Failed to create I2C mutex!");
+    return;
+  }
+
+  i2c_master_conf.i2c_mutex = i2c_mutex;
 
   ESP_ERROR_CHECK(
       i2c_new_master_bus(i2c_master_conf.bus_cfg, i2c_master_conf.bus_handle));
@@ -261,12 +267,12 @@ void encoder_initialization_task() {
       *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_0.dev_cfg,
       i2c_slave_conf_encoder_0.dev_handle));
 
-  /* ESP_ERROR_CHECK( */
-  /*     tca_select_channel(encoder_1.tca_channel, encoder_1.i2c_tca->dev_handle)); */
-  /* ESP_ERROR_CHECK(i2c_master_bus_add_device( */
-  /*     *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_1.dev_cfg, */
-  /*     i2c_slave_conf_encoder_1.dev_handle)); */
-  /* ESP_ERROR_CHECK(encoder_init(&encoder_1)); */
+  ESP_ERROR_CHECK(
+      tca_select_channel(encoder_1.tca_channel, encoder_1.i2c_tca->dev_handle));
+  ESP_ERROR_CHECK(i2c_master_bus_add_device(
+      *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_1.dev_cfg,
+      i2c_slave_conf_encoder_1.dev_handle));
+  ESP_ERROR_CHECK(encoder_init(&encoder_1));
 
   ESP_ERROR_CHECK(
       tca_select_channel(encoder_2.tca_channel, encoder_2.i2c_tca->dev_handle));
@@ -282,9 +288,10 @@ void encoder_initialization_task() {
       i2c_slave_conf_encoder_3.dev_handle));
   ESP_ERROR_CHECK(encoder_init(&encoder_3));
   xTaskCreate(encoder_task, "encoder0_task", 4096, &encoder_0, 5, NULL);
-  /* xTaskCreate(encoder_task, "encoder1_task", 4096, &encoder_1, 5, NULL); */
+  xTaskCreate(encoder_task, "encoder1_task", 4096, &encoder_1, 5, NULL);
   xTaskCreate(encoder_task, "encoder2_task", 4096, &encoder_2, 5, NULL);
   xTaskCreate(encoder_task, "encoder3_task", 4096, &encoder_3, 5, NULL);
+
   /* xTaskCreate(encoder_try_calibration_task, "encoder0_cal_task", 4096, */
   /*             &encoder_0, 5, NULL); */
 }
@@ -375,10 +382,15 @@ void init_scara() {
 
 void loop_scara() {
   while (1) {
-    motor_x.control_vars->encoder_target_pos = 0 + 250;
-    vTaskDelay(10000 / portTICK_PERIOD_MS);
-    motor_x.control_vars->encoder_target_pos = 4096 - 250;
-    vTaskDelay(10000 / portTICK_PERIOD_MS);
+    /* motor_x.control_vars->encoder_target_pos = 0 + 250; */
+    /* vTaskDelay(10000 / portTICK_PERIOD_MS); */
+    /* motor_x.control_vars->encoder_target_pos = 4096 - 250; */
+    /* vTaskDelay(10000 / portTICK_PERIOD_MS); */
+    ESP_LOGI(encoder_0.label, "value: %f", encoder_0.current_reading);
+    ESP_LOGI(encoder_1.label, "value: %f", encoder_1.current_reading);
+    ESP_LOGI(encoder_2.label, "value: %f", encoder_2.current_reading);
+    ESP_LOGI(encoder_3.label, "value: %f", encoder_3.current_reading);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 
   return;

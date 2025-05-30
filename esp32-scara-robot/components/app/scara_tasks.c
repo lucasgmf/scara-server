@@ -149,14 +149,15 @@ void encoder_task(void *arg) {
     encoder->accumulated_steps += delta;
     last_angle = current_angle;
 
-    ESP_LOGI(encoder->label, "Raw angle: %u", current_angle);
-    ESP_LOGI(encoder->label,
-             "Angle: %u | Delta: %d | Position: %ld | angle_deg: %.2f | "
-             "angle_rad :%.2f",
-             current_angle, delta, encoder->accumulated_steps,
-             encoder->accumulated_steps * 360.0 / 4096 / encoder->gear_ratio,
-             encoder->accumulated_steps * 2 * M_PI / encoder->gear_ratio /
-                 4096);
+    /* ESP_LOGI(encoder->label, "Raw angle: %u", current_angle); */
+    /* ESP_LOGI(encoder->label, */
+    /*          "Angle: %u | Delta: %d | Position: %ld | angle_deg: %.2f | " */
+    /*          "angle_rad :%.2f", */
+    /*          current_angle, delta, encoder->accumulated_steps, */
+    /*          encoder->accumulated_steps * 360.0 / 4096 / encoder->gear_ratio,
+     */
+    /*          encoder->accumulated_steps * 2 * M_PI / encoder->gear_ratio / */
+    /*              4096); */
 
     vTaskDelay(pdMS_TO_TICKS(50));
   }
