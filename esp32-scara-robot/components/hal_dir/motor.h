@@ -8,7 +8,7 @@
 #include "math.h"
 #include "switch_h.h"
 
-#define UPDATE_INTERVAL_MS 100
+#define UPDATE_INTERVAL_MS 50
 typedef struct {
   int group_unit;
   mcpwm_timer_handle_t timer;

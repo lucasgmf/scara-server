@@ -194,8 +194,7 @@ void motor_set_frequency(motor_t *motor, float target_freq_hz) {
     ESP_ERROR_CHECK(esp_timer_start_periodic(
         motor->mcpwm_vars->esp_timer_handle, UPDATE_INTERVAL_MS * 1000));
   }
-  /* ESP_LOGW("motor_set_frequency", "just set frequency to %f",
-   * target_freq_hz); */
+  ESP_LOGW("motor_set_frequency", "just set frequency to %f", target_freq_hz);
 }
 
 void motor_update_timer_cb(void *arg) {
