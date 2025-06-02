@@ -267,57 +267,84 @@ void encoder_initialization_task() {
       *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_0.dev_cfg,
       i2c_slave_conf_encoder_0.dev_handle));
 
-  ESP_ERROR_CHECK(
-      tca_select_channel(encoder_1.tca_channel, encoder_1.i2c_tca->dev_handle));
-  ESP_ERROR_CHECK(i2c_master_bus_add_device(
-      *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_1.dev_cfg,
-      i2c_slave_conf_encoder_1.dev_handle));
-  ESP_ERROR_CHECK(encoder_init(&encoder_1));
-
-  ESP_ERROR_CHECK(
-      tca_select_channel(encoder_2.tca_channel, encoder_2.i2c_tca->dev_handle));
-  ESP_ERROR_CHECK(i2c_master_bus_add_device(
-      *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_2.dev_cfg,
-      i2c_slave_conf_encoder_2.dev_handle));
-  ESP_ERROR_CHECK(encoder_init(&encoder_2));
-
-  ESP_ERROR_CHECK(
-      tca_select_channel(encoder_3.tca_channel, encoder_3.i2c_tca->dev_handle));
-  ESP_ERROR_CHECK(i2c_master_bus_add_device(
-      *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_3.dev_cfg,
-      i2c_slave_conf_encoder_3.dev_handle));
-  ESP_ERROR_CHECK(encoder_init(&encoder_3));
+  /* ESP_ERROR_CHECK( */
+  /*     tca_select_channel(encoder_1.tca_channel,
+   * encoder_1.i2c_tca->dev_handle)); */
+  /* ESP_ERROR_CHECK(i2c_master_bus_add_device( */
+  /*     *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_1.dev_cfg, */
+  /*     i2c_slave_conf_encoder_1.dev_handle)); */
+  /* ESP_ERROR_CHECK(encoder_init(&encoder_1)); */
+  /**/
+  /* ESP_ERROR_CHECK( */
+  /*     tca_select_channel(encoder_2.tca_channel,
+   * encoder_2.i2c_tca->dev_handle)); */
+  /* ESP_ERROR_CHECK(i2c_master_bus_add_device( */
+  /*     *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_2.dev_cfg, */
+  /*     i2c_slave_conf_encoder_2.dev_handle)); */
+  /* ESP_ERROR_CHECK(encoder_init(&encoder_2)); */
+  /**/
+  /* ESP_ERROR_CHECK( */
+  /*     tca_select_channel(encoder_3.tca_channel,
+   * encoder_3.i2c_tca->dev_handle)); */
+  /* ESP_ERROR_CHECK(i2c_master_bus_add_device( */
+  /*     *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_3.dev_cfg, */
+  /*     i2c_slave_conf_encoder_3.dev_handle)); */
+  /* ESP_ERROR_CHECK(encoder_init(&encoder_3)); */
   xTaskCreate(encoder_task, "encoder0_task", 4096, &encoder_0, 5, NULL);
-  xTaskCreate(encoder_task, "encoder1_task", 4096, &encoder_1, 5, NULL);
-  xTaskCreate(encoder_task, "encoder2_task", 4096, &encoder_2, 5, NULL);
-  xTaskCreate(encoder_task, "encoder3_task", 4096, &encoder_3, 5, NULL);
+  /* xTaskCreate(encoder_task, "encoder1_task", 4096, &encoder_1, 5, NULL); */
+  /* xTaskCreate(encoder_task, "encoder2_task", 4096, &encoder_2, 5, NULL); */
+  /* xTaskCreate(encoder_task, "encoder3_task", 4096, &encoder_3, 5, NULL); */
 
   /* xTaskCreate(encoder_try_calibration_task, "encoder0_cal_task", 4096, */
   /*             &encoder_0, 5, NULL); */
+
+  ESP_LOGE(TAG, "exiting encoder_initialization_task");
 }
 
 //////////////////////////////////
 ////// network/wifi_manager //////
 //////////////////////////////////
 
+/* Motor	mcpwm_unit	mcpwm_timer	mcpwm_opr */
+/* 1	0	0	0 */
+/* 2	0	1	1 */
+/* 3	0	2	2 */
+/* 4	1	0	0 */
+/* 5	1	1	1 */
+/* 6	1	2	2 */
 // TODO: FIX acceleration in the 0 transition!
 
 #define MOTOR_X_LABEL "Motor x"
 #define MOTOR_X_ID 0
 
+#define MOTOR_Y_LABEL "Motor y"
+#define MOTOR_Y_ID 0
+
 #define MCPWM_MAX_PERIOD_TICKS 60000 // WARN: maybe change this
 #define MCPWM_MIN_PERIOD_TICKS 5
 #define PWM_RESOLUTION_HZ 1000000
-#define PWM_MAX_FREQ_HZ 1100
-#define PWM_MIN_FREQ_HZ 1
-#define PWM_MAX_ACCEL_HZ 3000
+/* #define PWM_MAX_FREQ_HZ 300 // 1100 */
+/* #define PWM_MIN_FREQ_HZ 1 */
+/* #define PWM_MAX_ACCEL_HZ 3000 */
 
 motor_mcpwm_vars mcpwm_vars_x = {
     .group_unit = 0,
-    .timer = 0,
-    .operator= 0,
-    .comparator = 0,
-    .generator = 0,
+    .timer = NULL,
+    .operator= NULL,
+    .comparator = NULL,
+    .generator = NULL,
+    .esp_timer_handle = 0,
+    .mcpwm_min_period_ticks = MCPWM_MIN_PERIOD_TICKS,
+    .mcpwm_max_period_ticks = MCPWM_MAX_PERIOD_TICKS,
+    .pwm_resolution_hz = PWM_RESOLUTION_HZ,
+};
+
+motor_mcpwm_vars mcpwm_vars_y = {
+    .group_unit = 0,
+    .timer = NULL,
+    .operator= NULL,
+    .comparator = NULL,
+    .generator = NULL,
     .esp_timer_handle = 0,
     .mcpwm_min_period_ticks = MCPWM_MIN_PERIOD_TICKS,
     .mcpwm_max_period_ticks = MCPWM_MAX_PERIOD_TICKS,
@@ -326,25 +353,49 @@ motor_mcpwm_vars mcpwm_vars_x = {
 
 motor_pwm_vars_t pwm_vars_x = {
     .step_count = 0,
-    .max_freq = PWM_MAX_FREQ_HZ,
-    .min_freq = PWM_MIN_FREQ_HZ,
-    .max_accel = PWM_MAX_ACCEL_HZ,
+    .max_freq = 250,
+    .min_freq = 0,
+    .max_accel = 1000,
     .current_freq_hz = 0,
     .target_freq_hz = 0,
     .dir_is_reversed = false,
 };
 
-pid_controller_t pid_x = {
-    .Kp = 1,      // 1
+motor_pwm_vars_t pwm_vars_y = {
+    .step_count = 0,
+    .max_freq = 200,
+    .min_freq = 0,
+    .max_accel = 1500,
+    .current_freq_hz = 0,
+    .target_freq_hz = 0,
+    .dir_is_reversed = false,
+};
+
+pid_controller_t pid_motor_x = {
+    .Kp = 0.2,    // 1
     .Ki = 0.0025, // 0.01
-    .Kd = 0.2,    // 0.2
+    .Kd = 0.0,    // 0.2
+};
+
+pid_controller_t pid_motor_y = {
+    .Kp = 0.1, // 1
+    .Ki = 0.0, // 0.01
+    .Kd = 0.0, // 0.2
 };
 
 motor_control_vars control_vars_x = {
+    /* .ref_encoder = &encoder_0, */
+    .encoder_target_pos = 0,
+    .enable_pid = true,
+    .pid = &pid_motor_y,
+    .ref_switch = &switch_0,
+};
+
+motor_control_vars control_vars_y = {
     .ref_encoder = &encoder_0,
     .encoder_target_pos = 0,
     .enable_pid = true,
-    .pid = &pid_x,
+    .pid = &pid_motor_y,
     .ref_switch = &switch_0,
 };
 
@@ -358,11 +409,25 @@ motor_t motor_x = {
     .control_vars = &control_vars_x,
 };
 
-void motor_initialization_task() {
-  motor_init_dir(&motor_x);
-  motor_create_pwm(&motor_x);
+motor_t motor_y = {
+    .label = MOTOR_Y_LABEL,
+    .id = MOTOR_Y_ID,
+    .gpio_stp = GPIO_Y_STP,
+    .gpio_dir = GPIO_Y_DIR,
+    .mcpwm_vars = &mcpwm_vars_y,
+    .pwm_vars = &pwm_vars_y,
+    .control_vars = &control_vars_y,
+};
 
-  xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_x, 5, NULL);
+void motor_initialization_task() {
+  /* motor_init_dir(&motor_x); */
+  /* motor_create_pwm(&motor_x); */
+
+  motor_init_dir(&motor_y);
+  motor_create_pwm(&motor_y);
+
+  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_x, 5, NULL); */
+  xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_y, 5, NULL);
   return;
 }
 
@@ -374,13 +439,16 @@ void init_scara() {
   /* wifi_initialization_func(); */
   /* switch_initialization_task(); */
   encoder_initialization_task();
-  /* motor_initialization_task(); */
+  motor_initialization_task();
 
   ESP_LOGI(TAG, "");
   return;
 }
 
 void loop_scara() {
+  bool testMotor_x = false;
+  bool testMotor_y = false;
+
   while (1) {
     /* motor_x.control_vars->encoder_target_pos = 0 + 250; */
     /* vTaskDelay(10000 / portTICK_PERIOD_MS); */
@@ -391,7 +459,38 @@ void loop_scara() {
     /* ESP_LOGI(encoder_2.label, "value: %f", encoder_2.current_reading); */
     /* ESP_LOGI(encoder_3.label, "value: %f", encoder_3.current_reading); */
     ESP_LOGI("", "\n");
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    motor_y.control_vars->encoder_target_pos = 0 + 500;
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
+
+    motor_y.control_vars->encoder_target_pos = 4096 - 500;
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
+
+    /* vTaskDelay(1000 / portTICK_PERIOD_MS); */
+
+    if (testMotor_x) {
+      gpio_set_level(motor_x.gpio_dir, 1);
+      motor_set_frequency(&motor_x, motor_x.pwm_vars->max_freq);
+      vTaskDelay(2000 / portTICK_PERIOD_MS);
+
+      motor_set_frequency(&motor_x, 0);
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+      gpio_set_level(motor_x.gpio_dir, 0);
+      motor_set_frequency(&motor_x, motor_x.pwm_vars->max_freq);
+      vTaskDelay(2000 / portTICK_PERIOD_MS);
+
+      motor_set_frequency(&motor_x, 0);
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
+
+    if (testMotor_y) {
+      motor_y.control_vars->encoder_target_pos = 1000;
+      vTaskDelay(10000 / portTICK_PERIOD_MS);
+      motor_y.control_vars->encoder_target_pos = 1500;
+      vTaskDelay(10000 / portTICK_PERIOD_MS);
+    }
+
+    /* vTaskDelay(1000 / portTICK_PERIOD_MS); */
   }
 
   return;
