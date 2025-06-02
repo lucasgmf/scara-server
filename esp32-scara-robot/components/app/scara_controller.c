@@ -479,7 +479,6 @@ void loop_scara() {
     /* ESP_LOGI(encoder_1.label, "value: %f", encoder_1.current_reading); */
     /* ESP_LOGI(encoder_2.label, "value: %f", encoder_2.current_reading); */
     /* ESP_LOGI(encoder_3.label, "value: %f", encoder_3.current_reading); */
-    ESP_LOGI("", "\n");
     /* motor_y.control_vars->encoder_target_pos = 0 + 500; */
     /* vTaskDelay(5000 / portTICK_PERIOD_MS); */
     /**/
@@ -488,9 +487,9 @@ void loop_scara() {
 
     /* vTaskDelay(1000 / portTICK_PERIOD_MS); */
 
-    ESP_LOGI("switch_0", " value: %d", switch_0.is_pressed);
-    ESP_LOGI("switch_1", " value: %d", switch_1.is_pressed);
-    vTaskDelay(200 / portTICK_PERIOD_MS);
+    /* ESP_LOGI("switch_0", " value: %d", switch_0.is_pressed); */
+    /* ESP_LOGI("switch_1", " value: %d", switch_1.is_pressed); */
+    /* vTaskDelay(200 / portTICK_PERIOD_MS); */
 
     if (testMotor_x) {
       gpio_set_level(motor_x.gpio_dir, 1);
