@@ -196,11 +196,12 @@ void motor_control_task(void *arg) {
 
   while (1) {
 
-    if (!motor->control_vars->ref_encoder->is_calibrated) {
-      /* ESP_LOGI("motor_control_task", "encoder is not calibrated"); */
-      vTaskDelay(pdMS_TO_TICKS(MOTOR_CONTROL_TASK_PERIOD_MS));
-      continue;
-    }
+    /* if (!motor->control_vars->ref_encoder->is_calibrated) { */
+    /* ESP_LOGI("motor_control_task", "encoder is not calibrated"); */
+    /*   vTaskDelay(pdMS_TO_TICKS(MOTOR_CONTROL_TASK_PERIOD_MS)); */
+    /*   continue; */
+    /* } */
+
     error = motor->control_vars->encoder_target_pos -
             motor->control_vars->ref_encoder->current_reading;
 
@@ -233,7 +234,7 @@ void motor_control_task(void *arg) {
              motor->control_vars->pid->Ki * motor->control_vars->pid->integral +
              motor->control_vars->pid->Kd * derivative;
 
-    if (false) {
+    if (true) {
       ESP_LOGI("PID",
                "error: %.2f - output: %.2f | "
                "Kp*error = %.2f, Ki* integral = %.2f, Kd * derivative = %.2f",
@@ -260,8 +261,13 @@ void motor_control_task(void *arg) {
 
     // Determine direction
     bool reverse = output < 0;
+
+    // TODO: If direction is the same as previous, do not set level again...
+    ESP_LOGW("debug", "setting dir to %d",
+             motor->pwm_vars->dir_is_reversed ? reverse : !reverse);
+
     gpio_set_level(motor->gpio_dir,
-                   motor->pwm_vars->dir_is_reversed ? !reverse : reverse);
+                   motor->pwm_vars->dir_is_reversed ? reverse : !reverse);
 
     // Apply new frequency to motor
     motor_set_frequency(motor, local_target_freq_hz);
