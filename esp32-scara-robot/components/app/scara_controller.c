@@ -55,11 +55,22 @@ void wifi_initialization_func() {
 ////// switch /////////////
 ///////////////////////////
 
+#define GPIO_SWITCH_0 GPIO_NUM_12
+#define GPIO_SWITCH_1 GPIO_NUM_13
+
 gpio_config_t switch_0_io_conf = {
     .pin_bit_mask = (1ULL << GPIO_SWITCH_0), // Set the GPIO pin
     .mode = GPIO_MODE_INPUT,                 // Set as input mode
     .pull_up_en = GPIO_PULLUP_ENABLE,        // Enable pull-up resistor
     .pull_down_en = GPIO_PULLDOWN_DISABLE,   // Disable pull-down
+    .intr_type = GPIO_INTR_DISABLE,
+};
+
+gpio_config_t switch_1_io_conf = {
+    .pin_bit_mask = (1ULL << GPIO_SWITCH_1),
+    .mode = GPIO_MODE_INPUT,
+    .pull_up_en = GPIO_PULLUP_ENABLE,
+    .pull_down_en = GPIO_PULLDOWN_DISABLE,
     .intr_type = GPIO_INTR_DISABLE,
 };
 
@@ -69,9 +80,19 @@ switch_t switch_0 = {
     .is_pressed = false,
 };
 
+switch_t switch_1 = {
+    .config = &switch_1_io_conf,
+    .gpio_pin = GPIO_SWITCH_1,
+    .is_pressed = false,
+};
+
 void switch_initialization_task() {
   switch_init(&switch_0);
+  switch_init(&switch_1);
+
+  // TODO: one task for all switch
   xTaskCreate(switch_task, "switch_update_task", 4096, &switch_0, 5, NULL);
+  xTaskCreate(switch_task, "switch_update_task", 4096, &switch_1, 5, NULL);
 }
 //////////////////////////////////
 ////// drivers/i2c_bus ///////////
@@ -437,9 +458,9 @@ void motor_initialization_task() {
 
 void init_scara() {
   /* wifi_initialization_func(); */
-  /* switch_initialization_task(); */
-  encoder_initialization_task();
-  motor_initialization_task();
+  switch_initialization_task();
+  /* encoder_initialization_task(); */
+  /* motor_initialization_task(); */
 
   ESP_LOGI(TAG, "");
   return;
@@ -459,13 +480,17 @@ void loop_scara() {
     /* ESP_LOGI(encoder_2.label, "value: %f", encoder_2.current_reading); */
     /* ESP_LOGI(encoder_3.label, "value: %f", encoder_3.current_reading); */
     ESP_LOGI("", "\n");
-    motor_y.control_vars->encoder_target_pos = 0 + 500;
-    vTaskDelay(5000 / portTICK_PERIOD_MS);
-
-    motor_y.control_vars->encoder_target_pos = 4096 - 500;
-    vTaskDelay(5000 / portTICK_PERIOD_MS);
+    /* motor_y.control_vars->encoder_target_pos = 0 + 500; */
+    /* vTaskDelay(5000 / portTICK_PERIOD_MS); */
+    /**/
+    /* motor_y.control_vars->encoder_target_pos = 4096 - 500; */
+    /* vTaskDelay(5000 / portTICK_PERIOD_MS); */
 
     /* vTaskDelay(1000 / portTICK_PERIOD_MS); */
+
+    ESP_LOGI("switch_0", " value: %d", switch_0.is_pressed);
+    ESP_LOGI("switch_1", " value: %d", switch_1.is_pressed);
+    vTaskDelay(200 / portTICK_PERIOD_MS);
 
     if (testMotor_x) {
       gpio_set_level(motor_x.gpio_dir, 1);
