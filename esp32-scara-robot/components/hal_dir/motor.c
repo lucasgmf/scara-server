@@ -16,9 +16,11 @@ void motor_init_dir(motor_t *motor_n) {
 
 void motor_delete_pwm(motor_t *motor) {
   if (motor == NULL) {
-    ESP_LOGW("motor_delete_pwm", "Pointer is null in motor_delete_pwm");
+    ESP_LOGW(TAG, "Pointer is null in motor_delete_pwm");
     return;
   }
+
+  bool cleanup_gpio = false;
 
   if (motor->mcpwm_vars->timer) {
     mcpwm_timer_disable(motor->mcpwm_vars->timer);
@@ -39,6 +41,15 @@ void motor_delete_pwm(motor_t *motor) {
   if (motor->mcpwm_vars->operator) {
     mcpwm_del_operator(motor->mcpwm_vars->operator);
     motor->mcpwm_vars->operator= NULL;
+    cleanup_gpio =
+        true; // Only cleanup GPIO if operator was successfully deleted
+  }
+
+  // Only reset GPIO after successful cleanup
+  if (cleanup_gpio) {
+    gpio_reset_pin(motor->gpio_stp);
+    gpio_set_direction(motor->gpio_stp, GPIO_MODE_OUTPUT);
+    gpio_set_level(motor->gpio_stp, 0);
   }
 }
 
@@ -169,52 +180,62 @@ void motor_create_pwm(motor_t *motor) {
     return;
   }
 
-  /* ESP_LOGI(TAG, "PWM created for motor %d at freq %.2f Hz (period %u ticks)",
-   */
-  /*          motor->id, freq, period_ticks); */
+  ESP_LOGI(TAG, "PWM created for motor %d at freq %.2f Hz (period %u ticks)",
+           motor->id, freq, period_ticks);
 }
 
-void motor_set_frequency(motor_t *motor, float target_freq_hz) {
-  if (motor->pwm_vars->target_freq_hz == target_freq_hz) {
-    return;
+esp_err_t motor_update_pwm_frequency(motor_t *motor, float new_freq_hz) {
+  if (motor == NULL || motor->mcpwm_vars->timer == NULL) {
+    return ESP_ERR_INVALID_ARG;
   }
 
-  motor->pwm_vars->target_freq_hz = target_freq_hz;
+  // Clamp frequency to safe range
+  float freq = new_freq_hz;
+  if (freq > motor->pwm_vars->max_freq)
+    freq = motor->pwm_vars->max_freq;
+  if (freq < motor->pwm_vars->min_freq)
+    freq = motor->pwm_vars->min_freq;
 
-  if (motor->mcpwm_vars->esp_timer_handle == NULL) {
-    const esp_timer_create_args_t timer_args = {.callback =
-                                                    &motor_update_timer_cb,
-                                                .arg = motor,
-                                                .name = "motor_freq_updater"};
-    ESP_ERROR_CHECK(
-        esp_timer_create(&timer_args, &motor->mcpwm_vars->esp_timer_handle));
+  // Calculate new period
+  uint32_t period_ticks =
+      (uint32_t)(motor->mcpwm_vars->pwm_resolution_hz / freq);
+  if (period_ticks < motor->mcpwm_vars->mcpwm_min_period_ticks)
+    period_ticks = motor->mcpwm_vars->mcpwm_min_period_ticks;
+  if (period_ticks > motor->mcpwm_vars->mcpwm_max_period_ticks)
+    period_ticks = motor->mcpwm_vars->mcpwm_max_period_ticks;
+
+  uint32_t duty_ticks = period_ticks / 2; // 50% duty cycle
+
+  // Update timer period (this is the key optimization!)
+  esp_err_t err =
+      mcpwm_timer_set_period(motor->mcpwm_vars->timer, period_ticks);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to update timer period: %s", esp_err_to_name(err));
+    return err;
   }
 
-  if (!esp_timer_is_active(motor->mcpwm_vars->esp_timer_handle)) {
-    ESP_ERROR_CHECK(esp_timer_start_periodic(
-        motor->mcpwm_vars->esp_timer_handle, UPDATE_INTERVAL_MS * 1000));
+  // Update comparator value for 50% duty
+  err = mcpwm_comparator_set_compare_value(motor->mcpwm_vars->comparator,
+                                           duty_ticks);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to update compare value: %s", esp_err_to_name(err));
+    return err;
   }
-  ESP_LOGW("motor_set_frequency", "just set frequency to %f", target_freq_hz);
+
+  return ESP_OK;
 }
 
 void motor_update_timer_cb(void *arg) {
   motor_t *motor = (motor_t *)arg;
-
-  const float dt = UPDATE_INTERVAL_MS / 1000.0f; // seconds
+  const float dt = UPDATE_INTERVAL_MS / 1000.0f;
   float *current_freq = &motor->pwm_vars->current_freq_hz;
   float *target_freq = &motor->pwm_vars->target_freq_hz;
-  float *velocity =
-      &motor->pwm_vars
-           ->velocity_hz_per_s; // ← you need to add this to your struct
-  float max_accel = motor->pwm_vars->max_accel; // in Hz/sec
+  float *velocity = &motor->pwm_vars->velocity_hz_per_s;
+  float max_accel = motor->pwm_vars->max_accel;
 
-  // Frequency error
+  // Your existing frequency calculation logic...
   float freq_error = *target_freq - *current_freq;
-
-  // Compute desired velocity
   float desired_velocity = freq_error / dt;
-
-  // Limit the velocity change (acceleration)
   float accel_step = max_accel * dt;
 
   if (desired_velocity > *velocity + accel_step) {
@@ -225,31 +246,33 @@ void motor_update_timer_cb(void *arg) {
     *velocity = desired_velocity;
   }
 
-  // Apply velocity to frequency (integrate)
   *current_freq += (*velocity * dt);
 
-  // Clamp overshoot
   if ((freq_error > 0 && *current_freq > *target_freq) ||
       (freq_error < 0 && *current_freq < *target_freq)) {
     *current_freq = *target_freq;
     *velocity = 0;
   }
 
-  // Stop timer if target is reached
+  // **KEY CHANGE**: Use efficient update instead of recreate
+  if (*current_freq > 0.0f) {
+    esp_err_t err = motor_update_pwm_frequency(motor, *current_freq);
+    if (err != ESP_OK) {
+      ESP_LOGE(TAG, "Failed to update PWM frequency");
+    }
+  } else {
+    // Only delete PWM when stopping completely
+    motor_delete_pwm(motor);
+    ESP_LOGI(TAG, "PWM stopped at 0 Hz");
+  }
+
+  // Check if target reached
   if (fabs(*target_freq - *current_freq) < 0.5f && fabs(*velocity) < 1.0f) {
     *current_freq = *target_freq;
     *velocity = 0;
     esp_timer_stop(motor->mcpwm_vars->esp_timer_handle);
-    /* ESP_LOGI("motor", "Target frequency reached and stabilized."); */
   }
 
-  /* ESP_LOGI("motor", "Freq: %.2f Hz | Target: %.2f Hz | Vel: %.2f Hz/s", */
-  /*          *current_freq, *target_freq, *velocity); */
-
-  motor_delete_pwm(motor);
-  if (*current_freq > 0.0f) {
-    motor_create_pwm(motor);
-  } else {
-    ESP_LOGI("motor", "PWM stopped at 0 Hz");
-  }
+  ESP_LOGI(TAG, "Freq: %.2f Hz | Target: %.2f Hz | Vel: %.2f Hz/s",
+           *current_freq, *target_freq, *velocity);
 }

@@ -211,6 +211,7 @@ static encoder_t encoder_1 = {
     .gear_ratio = 62.0 / 18.0,
     .test_offset = 706,
     .is_calibrated = false,
+    .switch_n = &switch_0,
     .angle_degrees = 0,
 };
 
@@ -335,7 +336,10 @@ void encoder_initialization_task() {
 #define MOTOR_X_ID 0
 
 #define MOTOR_Y_LABEL "Motor y"
-#define MOTOR_Y_ID 0
+#define MOTOR_Y_ID 1
+
+#define MOTOR_Z_LABEL "Motor z"
+#define MOTOR_Z_ID 2
 
 #define MCPWM_MAX_PERIOD_TICKS 60000 // WARN: maybe change this
 #define MCPWM_MIN_PERIOD_TICKS 5
@@ -368,11 +372,23 @@ motor_mcpwm_vars mcpwm_vars_y = {
     .pwm_resolution_hz = PWM_RESOLUTION_HZ,
 };
 
+motor_mcpwm_vars mcpwm_vars_z = {
+    .group_unit = 1,
+    .timer = NULL,
+    .operator= NULL,
+    .comparator = NULL,
+    .generator = NULL,
+    .esp_timer_handle = 0,
+    .mcpwm_min_period_ticks = MCPWM_MIN_PERIOD_TICKS,
+    .mcpwm_max_period_ticks = MCPWM_MAX_PERIOD_TICKS,
+    .pwm_resolution_hz = PWM_RESOLUTION_HZ,
+};
+
 motor_pwm_vars_t pwm_vars_x = {
     .step_count = 0,
-    .max_freq = 250,
+    .max_freq = 1000,
     .min_freq = 0,
-    .max_accel = 1000,
+    .max_accel = 100,
     .current_freq_hz = 0,
     .target_freq_hz = 0,
     .dir_is_reversed = false,
@@ -380,9 +396,19 @@ motor_pwm_vars_t pwm_vars_x = {
 
 motor_pwm_vars_t pwm_vars_y = {
     .step_count = 0,
-    .max_freq = 200,
+    .max_freq = 1000,
     .min_freq = 0,
-    .max_accel = 1500,
+    .max_accel = 100,
+    .current_freq_hz = 0,
+    .target_freq_hz = 0,
+    .dir_is_reversed = false,
+};
+
+motor_pwm_vars_t pwm_vars_z = {
+    .step_count = 0,
+    .max_freq = 1000,
+    .min_freq = 0,
+    .max_accel = 100,
     .current_freq_hz = 0,
     .target_freq_hz = 0,
     .dir_is_reversed = false,
@@ -400,10 +426,15 @@ pid_controller_t pid_motor_y = {
     .Kd = 0.0, // 0.2
 };
 
+pid_controller_t pid_motor_z = {
+    .Kp = 0.1, // 1
+    .Ki = 0.0, // 0.01
+    .Kd = 0.0, // 0.2
+};
+
 motor_control_vars control_vars_x = {
-    /* .ref_encoder = &encoder_0, */
     .encoder_target_pos = 0,
-    .enable_pid = true,
+    .enable_pid = false,
     .pid = &pid_motor_y,
     .ref_switch = &switch_0,
 };
@@ -411,9 +442,17 @@ motor_control_vars control_vars_x = {
 motor_control_vars control_vars_y = {
     .ref_encoder = &encoder_0,
     .encoder_target_pos = 0,
-    .enable_pid = true,
+    .enable_pid = false,
     .pid = &pid_motor_y,
-    .ref_switch = &switch_0,
+    .ref_switch = &switch_1,
+};
+
+motor_control_vars control_vars_z = {
+    .ref_encoder = &encoder_2,
+    .encoder_target_pos = 0,
+    .enable_pid = false,
+    .pid = &pid_motor_z,
+    .ref_switch = &switch_1,
 };
 
 motor_t motor_x = {
@@ -424,6 +463,7 @@ motor_t motor_x = {
     .mcpwm_vars = &mcpwm_vars_x,
     .pwm_vars = &pwm_vars_x,
     .control_vars = &control_vars_x,
+    .is_inverted = true,
 };
 
 motor_t motor_y = {
@@ -434,17 +474,59 @@ motor_t motor_y = {
     .mcpwm_vars = &mcpwm_vars_y,
     .pwm_vars = &pwm_vars_y,
     .control_vars = &control_vars_y,
+    .is_inverted = false,
+};
+
+motor_t motor_z = {
+    .label = MOTOR_Z_LABEL,
+    .id = MOTOR_Z_ID,
+    .gpio_stp = GPIO_Z_STP,
+    .gpio_dir = GPIO_Z_DIR,
+    .mcpwm_vars = &mcpwm_vars_z,
+    .pwm_vars = &pwm_vars_z,
+    .control_vars = &control_vars_z,
+    .is_inverted = false,
 };
 
 void motor_initialization_task() {
-  /* motor_init_dir(&motor_x); */
-  /* motor_create_pwm(&motor_x); */
+  motor_init_dir(&motor_x);
+  motor_create_pwm(&motor_x);
+  motor_update_pwm_frequency(&motor_x, 0);
 
   motor_init_dir(&motor_y);
   motor_create_pwm(&motor_y);
+  motor_update_pwm_frequency(&motor_y, 0);
+
+  motor_init_dir(&motor_z);
+  motor_create_pwm(&motor_z);
+  motor_update_pwm_frequency(&motor_z, 0);
 
   /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_x, 5, NULL); */
-  xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_y, 5, NULL);
+  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_y, 5, NULL); */
+  return;
+}
+
+void calibration_initialization_task() {
+  gpio_set_level(motor_x.gpio_dir, false);
+  gpio_set_level(motor_y.gpio_dir, false);
+  gpio_set_level(motor_z.gpio_dir, false);
+
+  while (1) {
+
+    while (!motor_y.control_vars->ref_switch->is_pressed) {
+      /* motor_set_frequency(&motor_y, 200); */
+      /* motor_set_frequency(&motor_x, 0); */
+      motor_update_pwm_frequency(&motor_z, 500);
+      vTaskDelay(50);
+    }
+    while (!motor_x.control_vars->ref_switch->is_pressed) {
+      vTaskDelay(50);
+    }
+    if (motor_x.control_vars->ref_switch->is_pressed &&
+        motor_y.control_vars->ref_switch->is_pressed)
+      break;
+    vTaskDelay(50);
+  }
   return;
 }
 
@@ -452,26 +534,44 @@ void motor_initialization_task() {
 ////// Call functions ////////////
 //////////////////////////////////
 
-void init_scara() {
-  /* wifi_initialization_func(); */
-  switch_initialization_task();
-  encoder_initialization_task();
-  /* motor_initialization_task(); */
+void loop_scara_task() {
+  while (1) {
+    ESP_LOGI("loop_scara_task", "dir 1");
+    gpio_set_level(motor_x.gpio_dir, 1);
+    motor_update_pwm_frequency(&motor_x, motor_x.pwm_vars->max_freq);
+    gpio_set_level(motor_y.gpio_dir, 1);
+    motor_update_pwm_frequency(&motor_y, motor_y.pwm_vars->max_freq);
+    gpio_set_level(motor_z.gpio_dir, 1);
+    motor_update_pwm_frequency(&motor_z, motor_z.pwm_vars->max_freq);
 
-  ESP_LOGI(TAG, "");
-  return;
+    vTaskDelay(3000 / portTICK_PERIOD_MS);
+
+    motor_update_pwm_frequency(&motor_x, 0);
+    motor_update_pwm_frequency(&motor_y, 0);
+    motor_update_pwm_frequency(&motor_z, 0);
+
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    ESP_LOGI("loop_scara_task", "dir 0");
+    gpio_set_level(motor_x.gpio_dir, 0);
+    motor_update_pwm_frequency(&motor_x, motor_x.pwm_vars->max_freq);
+    gpio_set_level(motor_y.gpio_dir, 0);
+    motor_update_pwm_frequency(&motor_y, motor_y.pwm_vars->max_freq);
+    gpio_set_level(motor_z.gpio_dir, 0);
+    motor_update_pwm_frequency(&motor_z, motor_z.pwm_vars->max_freq);
+    vTaskDelay(3000 / portTICK_PERIOD_MS);
+
+    motor_update_pwm_frequency(&motor_x, 0);
+    motor_update_pwm_frequency(&motor_y, 0);
+    motor_update_pwm_frequency(&motor_z, 0);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    /* vTaskDelay(pdMS_TO_TICKS(25)); */
+  }
 }
 
-void loop_scara() {
-  bool testMotor_x = false;
-  bool testMotor_y = false;
-
+void loop_scara_readings() {
   while (1) {
-    /* motor_x.control_vars->encoder_target_pos = 0 + 250; */
-    /* vTaskDelay(10000 / portTICK_PERIOD_MS); */
-    /* motor_x.control_vars->encoder_target_pos = 4096 - 250; */
-    /* vTaskDelay(10000 / portTICK_PERIOD_MS); */
-
     ESP_LOGI("switch_0", "is pressed: %d", switch_0.is_pressed);
     ESP_LOGI("switch_1", "is pressed: %d", switch_1.is_pressed);
 
@@ -481,43 +581,19 @@ void loop_scara() {
     ESP_LOGI(encoder_3.label, "value: %f", encoder_3.current_reading);
 
     ESP_LOGI("", "");
-    /* motor_y.control_vars->encoder_target_pos = 0 + 500; */
-    /* vTaskDelay(5000 / portTICK_PERIOD_MS); */
-    /**/
-    /* motor_y.control_vars->encoder_target_pos = 4096 - 500; */
-    /* vTaskDelay(5000 / portTICK_PERIOD_MS); */
-
     vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-    /* ESP_LOGI("switch_0", " value: %d", switch_0.is_pressed); */
-    /* ESP_LOGI("switch_1", " value: %d", switch_1.is_pressed); */
-    /* vTaskDelay(200 / portTICK_PERIOD_MS); */
-
-    if (testMotor_x) {
-      gpio_set_level(motor_x.gpio_dir, 1);
-      motor_set_frequency(&motor_x, motor_x.pwm_vars->max_freq);
-      vTaskDelay(2000 / portTICK_PERIOD_MS);
-
-      motor_set_frequency(&motor_x, 0);
-      vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-      gpio_set_level(motor_x.gpio_dir, 0);
-      motor_set_frequency(&motor_x, motor_x.pwm_vars->max_freq);
-      vTaskDelay(2000 / portTICK_PERIOD_MS);
-
-      motor_set_frequency(&motor_x, 0);
-      vTaskDelay(1000 / portTICK_PERIOD_MS);
-    }
-
-    if (testMotor_y) {
-      motor_y.control_vars->encoder_target_pos = 1000;
-      vTaskDelay(10000 / portTICK_PERIOD_MS);
-      motor_y.control_vars->encoder_target_pos = 1500;
-      vTaskDelay(10000 / portTICK_PERIOD_MS);
-    }
-
-    /* vTaskDelay(1000 / portTICK_PERIOD_MS); */
   }
-
   return;
+}
+void init_scara() {
+  /* wifi_initialization_func(); */
+  /* switch_initialization_task(); */
+  /* encoder_initialization_task(); */
+  motor_initialization_task();
+
+  xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL);
+  /* xTaskCreate(loop_scara_readings, "readings", 4096, NULL, 5, NULL); */
+
+  /* calibration_initialization_task(); */
+  ESP_LOGI(TAG, "");
 }
