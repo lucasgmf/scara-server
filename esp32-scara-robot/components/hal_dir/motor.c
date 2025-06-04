@@ -45,7 +45,6 @@ void motor_delete_pwm(motor_t *motor) {
         true; // Only cleanup GPIO if operator was successfully deleted
   }
 
-  // Only reset GPIO after successful cleanup
   if (cleanup_gpio) {
     gpio_reset_pin(motor->gpio_stp);
     gpio_set_direction(motor->gpio_stp, GPIO_MODE_OUTPUT);
@@ -185,16 +184,39 @@ void motor_create_pwm(motor_t *motor) {
 }
 
 esp_err_t motor_update_pwm_frequency(motor_t *motor, float new_freq_hz) {
-  if (motor == NULL || motor->mcpwm_vars->timer == NULL) {
+  if (motor == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
+  motor->pwm_vars->current_freq_hz = new_freq_hz;
+
+  // Handle zero frequency - completely delete PWM for clean stop
+  if (new_freq_hz <= 0.0f) {
+    motor_delete_pwm(motor);
+    ESP_LOGI(TAG, "PWM stopped and deleted for 0 Hz");
+    return ESP_OK;
+  }
+
+  // Check if PWM needs to be created (transitioning from 0 to non-zero)
+  if (motor->mcpwm_vars->timer == NULL) {
+    // PWM was deleted, need to recreate it
+    motor_create_pwm(motor);
+    ESP_LOGI(TAG, "PWM recreated for transition from 0 Hz");
+    return ESP_OK; // motor_create_pwm already handles the frequency
+  }
+
+  // PWM exists, do efficient in-place update
   // Clamp frequency to safe range
   float freq = new_freq_hz;
+  ESP_LOGI(TAG, "Requested freq: %.2f, min: %.2f, max: %.2f", new_freq_hz,
+           motor->pwm_vars->min_freq, motor->pwm_vars->max_freq);
+
   if (freq > motor->pwm_vars->max_freq)
     freq = motor->pwm_vars->max_freq;
   if (freq < motor->pwm_vars->min_freq)
     freq = motor->pwm_vars->min_freq;
+
+  ESP_LOGI(TAG, "Clamped freq: %.2f", freq);
 
   // Calculate new period
   uint32_t period_ticks =
@@ -206,7 +228,7 @@ esp_err_t motor_update_pwm_frequency(motor_t *motor, float new_freq_hz) {
 
   uint32_t duty_ticks = period_ticks / 2; // 50% duty cycle
 
-  // Update timer period (this is the key optimization!)
+  // Update timer period (efficient in-place update)
   esp_err_t err =
       mcpwm_timer_set_period(motor->mcpwm_vars->timer, period_ticks);
   if (err != ESP_OK) {
@@ -222,11 +244,61 @@ esp_err_t motor_update_pwm_frequency(motor_t *motor, float new_freq_hz) {
     return err;
   }
 
+  ESP_LOGI(TAG, "PWM frequency updated in-place to %.2f Hz", freq);
+  return ESP_OK;
+}
+
+void motor_stop_pwm(motor_t *motor) {
+
+  if (motor == NULL || motor->mcpwm_vars->timer == NULL) {
+    return;
+  }
+
+  // Stop the timer first
+  esp_err_t err =
+      mcpwm_timer_start_stop(motor->mcpwm_vars->timer, MCPWM_TIMER_STOP_EMPTY);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to stop timer: %s", esp_err_to_name(err));
+  }
+
+  // Disable the timer
+  err = mcpwm_timer_disable(motor->mcpwm_vars->timer);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to disable timer: %s", esp_err_to_name(err));
+  }
+
+  // Force GPIO to LOW to eliminate noise
+  gpio_set_level(motor->gpio_stp, 0);
+
+  ESP_LOGI(TAG, "PWM cleanly stopped, GPIO set to LOW");
+}
+
+esp_err_t motor_restart_pwm(motor_t *motor) {
+  if (motor == NULL || motor->mcpwm_vars->timer == NULL) {
+    return ESP_ERR_INVALID_ARG;
+  }
+
+  // Re-enable and start timer
+  esp_err_t err = mcpwm_timer_enable(motor->mcpwm_vars->timer);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to re-enable timer: %s", esp_err_to_name(err));
+    return err;
+  }
+
+  err = mcpwm_timer_start_stop(motor->mcpwm_vars->timer,
+                               MCPWM_TIMER_START_NO_STOP);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to restart timer: %s", esp_err_to_name(err));
+    return err;
+  }
+
   return ESP_OK;
 }
 
 void motor_update_timer_cb(void *arg) {
   motor_t *motor = (motor_t *)arg;
+  ESP_LOGI(TAG, "Timer callback: current=%.2f, target=%.2f",
+           motor->pwm_vars->current_freq_hz, motor->pwm_vars->target_freq_hz);
   const float dt = UPDATE_INTERVAL_MS / 1000.0f;
   float *current_freq = &motor->pwm_vars->current_freq_hz;
   float *target_freq = &motor->pwm_vars->target_freq_hz;
@@ -254,15 +326,15 @@ void motor_update_timer_cb(void *arg) {
     *velocity = 0;
   }
 
-  // **KEY CHANGE**: Use efficient update instead of recreate
+  //  Use efficient update instead of recreate
   if (*current_freq > 0.0f) {
     esp_err_t err = motor_update_pwm_frequency(motor, *current_freq);
     if (err != ESP_OK) {
       ESP_LOGE(TAG, "Failed to update PWM frequency");
     }
   } else {
-    // Only delete PWM when stopping completely
-    motor_delete_pwm(motor);
+    // Properly stop PWM and clean GPIO when frequency is 0
+    motor_stop_pwm(motor);
     ESP_LOGI(TAG, "PWM stopped at 0 Hz");
   }
 

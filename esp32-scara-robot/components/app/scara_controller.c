@@ -539,32 +539,32 @@ void loop_scara_task() {
     ESP_LOGI("loop_scara_task", "dir 1");
     gpio_set_level(motor_x.gpio_dir, 1);
     motor_update_pwm_frequency(&motor_x, motor_x.pwm_vars->max_freq);
-    gpio_set_level(motor_y.gpio_dir, 1);
-    motor_update_pwm_frequency(&motor_y, motor_y.pwm_vars->max_freq);
-    gpio_set_level(motor_z.gpio_dir, 1);
-    motor_update_pwm_frequency(&motor_z, motor_z.pwm_vars->max_freq);
+    /* gpio_set_level(motor_y.gpio_dir, 1); */
+    /* motor_update_pwm_frequency(&motor_y, motor_y.pwm_vars->max_freq); */
+    /* gpio_set_level(motor_z.gpio_dir, 1); */
+    /* motor_update_pwm_frequency(&motor_z, motor_z.pwm_vars->max_freq); */
 
     vTaskDelay(3000 / portTICK_PERIOD_MS);
 
     motor_update_pwm_frequency(&motor_x, 0);
-    motor_update_pwm_frequency(&motor_y, 0);
-    motor_update_pwm_frequency(&motor_z, 0);
+    /* motor_update_pwm_frequency(&motor_y, 0); */
+    /* motor_update_pwm_frequency(&motor_z, 0); */
 
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    vTaskDelay(3000 / portTICK_PERIOD_MS);
 
     ESP_LOGI("loop_scara_task", "dir 0");
     gpio_set_level(motor_x.gpio_dir, 0);
     motor_update_pwm_frequency(&motor_x, motor_x.pwm_vars->max_freq);
-    gpio_set_level(motor_y.gpio_dir, 0);
-    motor_update_pwm_frequency(&motor_y, motor_y.pwm_vars->max_freq);
-    gpio_set_level(motor_z.gpio_dir, 0);
-    motor_update_pwm_frequency(&motor_z, motor_z.pwm_vars->max_freq);
+    /* gpio_set_level(motor_y.gpio_dir, 0); */
+    /* motor_update_pwm_frequency(&motor_y, motor_y.pwm_vars->max_freq); */
+    /* gpio_set_level(motor_z.gpio_dir, 0); */
+    /* motor_update_pwm_frequency(&motor_z, motor_z.pwm_vars->max_freq); */
     vTaskDelay(3000 / portTICK_PERIOD_MS);
 
     motor_update_pwm_frequency(&motor_x, 0);
-    motor_update_pwm_frequency(&motor_y, 0);
-    motor_update_pwm_frequency(&motor_z, 0);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    /* motor_update_pwm_frequency(&motor_y, 0); */
+    /* motor_update_pwm_frequency(&motor_z, 0); */
+    vTaskDelay(3000 / portTICK_PERIOD_MS);
 
     /* vTaskDelay(pdMS_TO_TICKS(25)); */
   }
