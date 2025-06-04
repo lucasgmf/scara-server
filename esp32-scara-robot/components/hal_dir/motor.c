@@ -14,6 +14,33 @@ void motor_init_dir(motor_t *motor_n) {
   return;
 }
 
+void motor_stop_pwm(motor_t *motor) {
+  if (motor == NULL || motor->mcpwm_vars->timer == NULL) {
+    return;
+  }
+
+  // Check if timer is already stopped/disabled to avoid errors
+  esp_err_t err;
+
+  // Try to stop the timer first - only if it's not already stopped
+  err =
+      mcpwm_timer_start_stop(motor->mcpwm_vars->timer, MCPWM_TIMER_STOP_EMPTY);
+  if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+    ESP_LOGW(TAG, "Failed to stop timer: %s", esp_err_to_name(err));
+  }
+
+  // Try to disable the timer - only if it's not already disabled
+  err = mcpwm_timer_disable(motor->mcpwm_vars->timer);
+  if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+    ESP_LOGW(TAG, "Failed to disable timer: %s", esp_err_to_name(err));
+  }
+
+  // Force GPIO to LOW to eliminate noise
+  gpio_set_level(motor->gpio_stp, 0);
+
+  ESP_LOGI(TAG, "PWM cleanly stopped, GPIO set to LOW");
+}
+
 void motor_delete_pwm(motor_t *motor) {
   if (motor == NULL) {
     ESP_LOGW(TAG, "Pointer is null in motor_delete_pwm");
@@ -22,24 +49,52 @@ void motor_delete_pwm(motor_t *motor) {
 
   bool cleanup_gpio = false;
 
+  // Stop timer first if it exists and is running
   if (motor->mcpwm_vars->timer) {
-    mcpwm_timer_disable(motor->mcpwm_vars->timer);
-    mcpwm_del_timer(motor->mcpwm_vars->timer);
+    // Try to stop first, ignore errors if already stopped
+    esp_err_t err = mcpwm_timer_start_stop(motor->mcpwm_vars->timer,
+                                           MCPWM_TIMER_STOP_EMPTY);
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+      ESP_LOGW(TAG, "Error stopping timer during deletion: %s",
+               esp_err_to_name(err));
+    }
+
+    // Try to disable, ignore errors if already disabled
+    err = mcpwm_timer_disable(motor->mcpwm_vars->timer);
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+      ESP_LOGW(TAG, "Error disabling timer during deletion: %s",
+               esp_err_to_name(err));
+    }
+
+    // Now delete the timer
+    err = mcpwm_del_timer(motor->mcpwm_vars->timer);
+    if (err != ESP_OK) {
+      ESP_LOGW(TAG, "Error deleting timer: %s", esp_err_to_name(err));
+    }
     motor->mcpwm_vars->timer = NULL;
   }
 
   if (motor->mcpwm_vars->generator) {
-    mcpwm_del_generator(motor->mcpwm_vars->generator);
+    esp_err_t err = mcpwm_del_generator(motor->mcpwm_vars->generator);
+    if (err != ESP_OK) {
+      ESP_LOGW(TAG, "Error deleting generator: %s", esp_err_to_name(err));
+    }
     motor->mcpwm_vars->generator = NULL;
   }
 
   if (motor->mcpwm_vars->comparator) {
-    mcpwm_del_comparator(motor->mcpwm_vars->comparator);
+    esp_err_t err = mcpwm_del_comparator(motor->mcpwm_vars->comparator);
+    if (err != ESP_OK) {
+      ESP_LOGW(TAG, "Error deleting comparator: %s", esp_err_to_name(err));
+    }
     motor->mcpwm_vars->comparator = NULL;
   }
 
   if (motor->mcpwm_vars->operator) {
-    mcpwm_del_operator(motor->mcpwm_vars->operator);
+    esp_err_t err = mcpwm_del_operator(motor->mcpwm_vars->operator);
+    if (err != ESP_OK) {
+      ESP_LOGW(TAG, "Error deleting operator: %s", esp_err_to_name(err));
+    }
     motor->mcpwm_vars->operator= NULL;
     cleanup_gpio =
         true; // Only cleanup GPIO if operator was successfully deleted
@@ -51,7 +106,6 @@ void motor_delete_pwm(motor_t *motor) {
     gpio_set_level(motor->gpio_stp, 0);
   }
 }
-
 void motor_create_pwm(motor_t *motor) {
   if (motor == NULL) {
     ESP_LOGE(TAG, "Parameter is null, aborting.");
@@ -221,7 +275,7 @@ esp_err_t motor_set_target_frequency(motor_t *motor, float target_freq_hz) {
   return ESP_OK;
 }
 
-// Updated motor_update_pwm_frequency_immediate using the new function
+// Also fix the motor_update_pwm_frequency_immediate function
 esp_err_t motor_update_pwm_frequency_immediate(motor_t *motor,
                                                float new_freq_hz) {
   if (motor == NULL) {
@@ -230,7 +284,9 @@ esp_err_t motor_update_pwm_frequency_immediate(motor_t *motor,
 
   // Handle zero frequency - completely delete PWM for clean stop
   if (new_freq_hz <= 0.0f) {
+    motor_stop_pwm(motor);
     motor_delete_pwm(motor);
+    motor->pwm_vars->current_freq_hz = 0.0f; // Update current frequency
     ESP_LOGI(TAG, "PWM stopped and deleted for 0 Hz");
     return ESP_OK;
   }
@@ -243,6 +299,7 @@ esp_err_t motor_update_pwm_frequency_immediate(motor_t *motor,
       ESP_LOGE(TAG, "Failed to recreate PWM");
       return err;
     }
+    motor->pwm_vars->current_freq_hz = new_freq_hz; // Update current frequency
     ESP_LOGI(TAG, "PWM recreated for transition from 0 Hz to %.2f Hz",
              new_freq_hz);
     return ESP_OK;
@@ -282,6 +339,7 @@ esp_err_t motor_update_pwm_frequency_immediate(motor_t *motor,
     return err;
   }
 
+  motor->pwm_vars->current_freq_hz = freq; // Update current frequency
   ESP_LOGI(TAG, "PWM frequency updated immediately to %.2f Hz", freq);
   return ESP_OK;
 }
@@ -307,40 +365,14 @@ esp_err_t motor_restart_pwm(motor_t *motor) {
 
   return ESP_OK;
 }
-void motor_stop_pwm(motor_t *motor) {
-  if (motor == NULL || motor->mcpwm_vars->timer == NULL) {
-    return;
-  }
 
-  // Check if timer is already stopped/disabled to avoid errors
-  esp_err_t err;
-
-  // Try to stop the timer first
-  err =
-      mcpwm_timer_start_stop(motor->mcpwm_vars->timer, MCPWM_TIMER_STOP_EMPTY);
-  if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
-    ESP_LOGW(TAG, "Failed to stop timer: %s", esp_err_to_name(err));
-  }
-
-  // Try to disable the timer
-  err = mcpwm_timer_disable(motor->mcpwm_vars->timer);
-  if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
-    ESP_LOGW(TAG, "Failed to disable timer: %s", esp_err_to_name(err));
-  }
-
-  // Force GPIO to LOW to eliminate noise
-  gpio_set_level(motor->gpio_stp, 0);
-
-  ESP_LOGI(TAG, "PWM cleanly stopped, GPIO set to LOW");
-}
-
-// Fixed timer callback with proper acceleration control
+// Updated timer callback to avoid redundant stop calls
 void motor_update_timer_cb(void *arg) {
   motor_t *motor = (motor_t *)arg;
 
   const float dt = UPDATE_INTERVAL_MS / 1000.0f;
   float current_freq = motor->pwm_vars->current_freq_hz;
-  float target_freq = motor->pwm_vars->target_freq_hz; // Keep original target
+  float target_freq = motor->pwm_vars->target_freq_hz;
   float *velocity = &motor->pwm_vars->velocity_hz_per_s;
   float max_accel = motor->pwm_vars->max_accel;
 
@@ -355,14 +387,16 @@ void motor_update_timer_cb(void *arg) {
     motor->pwm_vars->current_freq_hz = target_freq;
     *velocity = 0;
 
-    // Update PWM to exact target frequency
+    // Handle target frequency
     if (target_freq > 0.0f) {
       esp_err_t err = motor_update_pwm_frequency_immediate(motor, target_freq);
       if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to update PWM frequency to target");
       }
     } else {
-      motor_stop_pwm(motor);
+      // Target is 0 - delete PWM completely (this will also stop it)
+      motor_delete_pwm(motor);
+      ESP_LOGI(TAG, "PWM stopped and deleted for 0 Hz target");
     }
 
     // Stop the timer - target reached
@@ -386,7 +420,7 @@ void motor_update_timer_cb(void *arg) {
   *velocity += accel_step;
 
   // Limit maximum velocity to prevent overshoot
-  float max_velocity = max_accel * 2.0f; // Reasonable max velocity
+  float max_velocity = max_accel * 2.0f;
   if (*velocity > max_velocity)
     *velocity = max_velocity;
   if (*velocity < -max_velocity)
@@ -416,10 +450,16 @@ void motor_update_timer_cb(void *arg) {
     esp_err_t err = motor_update_pwm_frequency_immediate(motor, new_freq);
     if (err != ESP_OK) {
       ESP_LOGE(TAG, "Failed to update PWM frequency");
+      // On error, stop the acceleration timer to prevent further issues
+      esp_timer_stop(motor->mcpwm_vars->esp_timer_handle);
+      return;
     }
   } else {
-    motor_stop_pwm(motor);
-    ESP_LOGI(TAG, "PWM stopped at 0 Hz");
+    // Frequency reached 0 - just stop PWM, let the target check handle deletion
+    if (motor->mcpwm_vars->timer != NULL) { // Only stop if timer exists
+      motor_stop_pwm(motor);
+      ESP_LOGI(TAG, "PWM stopped at 0 Hz");
+    }
   }
 
   ESP_LOGI(TAG,
