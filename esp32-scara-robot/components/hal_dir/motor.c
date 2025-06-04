@@ -49,25 +49,16 @@ void motor_delete_pwm(motor_t *motor) {
 
   bool cleanup_gpio = false;
 
-  // Stop timer first if it exists and is running
+  // Stop timer first if it exists
   if (motor->mcpwm_vars->timer) {
-    // Try to stop first, ignore errors if already stopped
-    esp_err_t err = mcpwm_timer_start_stop(motor->mcpwm_vars->timer,
-                                           MCPWM_TIMER_STOP_EMPTY);
-    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
-      ESP_LOGW(TAG, "Error stopping timer during deletion: %s",
-               esp_err_to_name(err));
-    }
+    // Try to stop first, but silently ignore "already stopped" errors
+    mcpwm_timer_start_stop(motor->mcpwm_vars->timer, MCPWM_TIMER_STOP_EMPTY);
 
-    // Try to disable, ignore errors if already disabled
-    err = mcpwm_timer_disable(motor->mcpwm_vars->timer);
-    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
-      ESP_LOGW(TAG, "Error disabling timer during deletion: %s",
-               esp_err_to_name(err));
-    }
+    // Try to disable, but silently ignore "already disabled" errors
+    mcpwm_timer_disable(motor->mcpwm_vars->timer);
 
     // Now delete the timer
-    err = mcpwm_del_timer(motor->mcpwm_vars->timer);
+    esp_err_t err = mcpwm_del_timer(motor->mcpwm_vars->timer);
     if (err != ESP_OK) {
       ESP_LOGW(TAG, "Error deleting timer: %s", esp_err_to_name(err));
     }
@@ -106,6 +97,7 @@ void motor_delete_pwm(motor_t *motor) {
     gpio_set_level(motor->gpio_stp, 0);
   }
 }
+
 void motor_create_pwm(motor_t *motor) {
   if (motor == NULL) {
     ESP_LOGE(TAG, "Parameter is null, aborting.");
@@ -454,30 +446,15 @@ void motor_update_timer_cb(void *arg) {
       esp_timer_stop(motor->mcpwm_vars->esp_timer_handle);
       return;
     }
-  } else {
-    // Frequency reached 0 - just stop PWM, let the target check handle deletion
-    if (motor->mcpwm_vars->timer != NULL) { // Only stop if timer exists
-      motor_stop_pwm(motor);
-      ESP_LOGI(TAG, "PWM stopped at 0 Hz");
-    }
+  } else if (new_freq == 0.0f && motor->mcpwm_vars->timer != NULL) {
+    // Frequency reached 0 - delete PWM completely (no need to stop first)
+    motor_delete_pwm(motor);
+    ESP_LOGI(TAG, "PWM deleted at 0 Hz");
   }
 
   ESP_LOGI(TAG,
            "Freq: %.2f Hz | Target: %.2f Hz | Vel: %.2f Hz/s | Error: %.2f",
            new_freq, target_freq, *velocity, freq_error);
-}
-
-// Function to stop acceleration and set frequency immediately (emergency stop)
-esp_err_t motor_set_frequency_immediate(motor_t *motor, float freq_hz) {
-  if (motor == NULL) {
-    return ESP_ERR_INVALID_ARG;
-  }
-
-  // Stop acceleration timer
-  esp_timer_stop(motor->mcpwm_vars->esp_timer_handle);
-
-  // Set frequency immediately
-  return motor_update_pwm_frequency_immediate(motor, freq_hz);
 }
 
 esp_err_t motor_init_timer(motor_t *motor) {
