@@ -288,33 +288,30 @@ void encoder_initialization_task() {
       *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_0.dev_cfg,
       i2c_slave_conf_encoder_0.dev_handle));
 
-  /* ESP_ERROR_CHECK( */
-  /*     tca_select_channel(encoder_1.tca_channel,
-   * encoder_1.i2c_tca->dev_handle)); */
-  /* ESP_ERROR_CHECK(i2c_master_bus_add_device( */
-  /*     *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_1.dev_cfg, */
-  /*     i2c_slave_conf_encoder_1.dev_handle)); */
-  /* ESP_ERROR_CHECK(encoder_init(&encoder_1)); */
-  /**/
-  /* ESP_ERROR_CHECK( */
-  /*     tca_select_channel(encoder_2.tca_channel,
-   * encoder_2.i2c_tca->dev_handle)); */
-  /* ESP_ERROR_CHECK(i2c_master_bus_add_device( */
-  /*     *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_2.dev_cfg, */
-  /*     i2c_slave_conf_encoder_2.dev_handle)); */
-  /* ESP_ERROR_CHECK(encoder_init(&encoder_2)); */
-  /**/
-  /* ESP_ERROR_CHECK( */
-  /*     tca_select_channel(encoder_3.tca_channel,
-   * encoder_3.i2c_tca->dev_handle)); */
-  /* ESP_ERROR_CHECK(i2c_master_bus_add_device( */
-  /*     *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_3.dev_cfg, */
-  /*     i2c_slave_conf_encoder_3.dev_handle)); */
-  /* ESP_ERROR_CHECK(encoder_init(&encoder_3)); */
+  ESP_ERROR_CHECK(
+      tca_select_channel(encoder_1.tca_channel, encoder_1.i2c_tca->dev_handle));
+  ESP_ERROR_CHECK(i2c_master_bus_add_device(
+      *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_1.dev_cfg,
+      i2c_slave_conf_encoder_1.dev_handle));
+  ESP_ERROR_CHECK(encoder_init(&encoder_1));
+
+  ESP_ERROR_CHECK(
+      tca_select_channel(encoder_2.tca_channel, encoder_2.i2c_tca->dev_handle));
+  ESP_ERROR_CHECK(i2c_master_bus_add_device(
+      *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_2.dev_cfg,
+      i2c_slave_conf_encoder_2.dev_handle));
+  ESP_ERROR_CHECK(encoder_init(&encoder_2));
+
+  ESP_ERROR_CHECK(
+      tca_select_channel(encoder_3.tca_channel, encoder_3.i2c_tca->dev_handle));
+  ESP_ERROR_CHECK(i2c_master_bus_add_device(
+      *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_3.dev_cfg,
+      i2c_slave_conf_encoder_3.dev_handle));
+  ESP_ERROR_CHECK(encoder_init(&encoder_3));
   xTaskCreate(encoder_task, "encoder0_task", 4096, &encoder_0, 5, NULL);
-  /* xTaskCreate(encoder_task, "encoder1_task", 4096, &encoder_1, 5, NULL); */
-  /* xTaskCreate(encoder_task, "encoder2_task", 4096, &encoder_2, 5, NULL); */
-  /* xTaskCreate(encoder_task, "encoder3_task", 4096, &encoder_3, 5, NULL); */
+  xTaskCreate(encoder_task, "encoder1_task", 4096, &encoder_1, 5, NULL);
+  xTaskCreate(encoder_task, "encoder2_task", 4096, &encoder_2, 5, NULL);
+  xTaskCreate(encoder_task, "encoder3_task", 4096, &encoder_3, 5, NULL);
 
   /* xTaskCreate(encoder_try_calibration_task, "encoder0_cal_task", 4096, */
   /*             &encoder_0, 5, NULL); */
@@ -458,8 +455,8 @@ void motor_initialization_task() {
 
 void init_scara() {
   /* wifi_initialization_func(); */
-  switch_initialization_task();
-  /* encoder_initialization_task(); */
+  /* switch_initialization_task(); */
+  encoder_initialization_task();
   /* motor_initialization_task(); */
 
   ESP_LOGI(TAG, "");
@@ -475,17 +472,17 @@ void loop_scara() {
     /* vTaskDelay(10000 / portTICK_PERIOD_MS); */
     /* motor_x.control_vars->encoder_target_pos = 4096 - 250; */
     /* vTaskDelay(10000 / portTICK_PERIOD_MS); */
-    /* ESP_LOGI(encoder_0.label, "value: %f", encoder_0.current_reading); */
-    /* ESP_LOGI(encoder_1.label, "value: %f", encoder_1.current_reading); */
-    /* ESP_LOGI(encoder_2.label, "value: %f", encoder_2.current_reading); */
-    /* ESP_LOGI(encoder_3.label, "value: %f", encoder_3.current_reading); */
+    ESP_LOGI(encoder_0.label, "value: %f", encoder_0.current_reading);
+    ESP_LOGI(encoder_1.label, "value: %f", encoder_1.current_reading);
+    ESP_LOGI(encoder_2.label, "value: %f", encoder_2.current_reading);
+    ESP_LOGI(encoder_3.label, "value: %f", encoder_3.current_reading);
     /* motor_y.control_vars->encoder_target_pos = 0 + 500; */
     /* vTaskDelay(5000 / portTICK_PERIOD_MS); */
     /**/
     /* motor_y.control_vars->encoder_target_pos = 4096 - 500; */
     /* vTaskDelay(5000 / portTICK_PERIOD_MS); */
 
-    /* vTaskDelay(1000 / portTICK_PERIOD_MS); */
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
 
     /* ESP_LOGI("switch_0", " value: %d", switch_0.is_pressed); */
     /* ESP_LOGI("switch_1", " value: %d", switch_1.is_pressed); */
