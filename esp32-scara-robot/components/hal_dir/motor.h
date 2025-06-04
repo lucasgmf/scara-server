@@ -8,7 +8,7 @@
 #include "math.h"
 #include "switch_h.h"
 
-#define UPDATE_INTERVAL_MS 50
+#define UPDATE_INTERVAL_MS 20
 typedef struct {
   int group_unit;
   mcpwm_timer_handle_t timer;
@@ -59,6 +59,12 @@ typedef struct {
 void motor_init_dir(motor_t *motor_n);
 void motor_delete_pwm(motor_t *motor);
 void motor_create_pwm(motor_t *motor);
-esp_err_t motor_update_pwm_frequency(motor_t *motor, float new_freq_hz);
+esp_err_t motor_init_timer(motor_t *motor);
+esp_err_t motor_set_frequency_immediate(motor_t *motor, float freq_hz);
+void motor_delete_timer(motor_t *motor);
+esp_err_t motor_set_target_frequency(motor_t *motor, float target_freq_hz);
+esp_err_t motor_create_pwm_with_frequency(motor_t *motor, float freq_hz);
+
+
 
 #endif // MOTOR_H

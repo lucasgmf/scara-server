@@ -195,7 +195,7 @@ void motor_control_task(void *arg) {
     if (fabsf(error) < DEAD_BAND_THRESHOLD) {
       motor->control_vars->pid->integral = 0.0f;
       motor->pwm_vars->target_freq_hz = 0.0f;
-      motor_update_pwm_frequency(motor, 0.0f);
+      motor_set_target_frequency(motor, 0.0f);
       vTaskDelay(pdMS_TO_TICKS(MOTOR_CONTROL_TASK_PERIOD_MS));
       continue;
     }
@@ -253,7 +253,7 @@ void motor_control_task(void *arg) {
                    motor->pwm_vars->dir_is_reversed ? reverse : !reverse);
 
     // Apply new frequency to motor
-    motor_update_pwm_frequency(motor, local_target_freq_hz);
+    motor_set_target_frequency(motor, local_target_freq_hz);
     vTaskDelay(pdMS_TO_TICKS(MOTOR_CONTROL_TASK_PERIOD_MS));
   }
 }
