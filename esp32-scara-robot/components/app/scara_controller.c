@@ -55,8 +55,8 @@ void wifi_initialization_func() {
 ////// switch /////////////
 ///////////////////////////
 
-#define GPIO_SWITCH_0 GPIO_NUM_12
-#define GPIO_SWITCH_1 GPIO_NUM_13
+#define GPIO_SWITCH_0 GPIO_NUM_15
+#define GPIO_SWITCH_1 GPIO_NUM_32
 
 gpio_config_t switch_0_io_conf = {
     .pin_bit_mask = (1ULL << GPIO_SWITCH_0), // Set the GPIO pin
@@ -192,6 +192,7 @@ static encoder_t encoder_0 = {
     .test_offset = 706,
     .is_calibrated = false,
     .switch_n = &switch_0,
+    .angle_degrees = 0,
 };
 
 static encoder_t encoder_1 = {
@@ -210,6 +211,7 @@ static encoder_t encoder_1 = {
     .gear_ratio = 62.0 / 18.0,
     .test_offset = 706,
     .is_calibrated = false,
+    .angle_degrees = 0,
 };
 
 static encoder_t encoder_2 = {
@@ -228,8 +230,6 @@ static encoder_t encoder_2 = {
     .gear_ratio = 62.0 / 18.0,
     .test_offset = 706,
     .is_calibrated = false,
-    /* .i2c_mutex = &i2c_mutex, */
-    /* .switch_n = &switch_0, */
 };
 
 static encoder_t encoder_3 = {
@@ -248,8 +248,7 @@ static encoder_t encoder_3 = {
     .gear_ratio = 62.0 / 18.0,
     .test_offset = 706,
     .is_calibrated = false,
-    /* .i2c_mutex = &i2c_mutex, */
-    /* .switch_n = &switch_0, */
+    .angle_degrees = 0,
 };
 
 #include "stdlib.h"
@@ -455,7 +454,7 @@ void motor_initialization_task() {
 
 void init_scara() {
   /* wifi_initialization_func(); */
-  /* switch_initialization_task(); */
+  switch_initialization_task();
   encoder_initialization_task();
   /* motor_initialization_task(); */
 
@@ -472,10 +471,16 @@ void loop_scara() {
     /* vTaskDelay(10000 / portTICK_PERIOD_MS); */
     /* motor_x.control_vars->encoder_target_pos = 4096 - 250; */
     /* vTaskDelay(10000 / portTICK_PERIOD_MS); */
+
+    ESP_LOGI("switch_0", "is pressed: %d", switch_0.is_pressed);
+    ESP_LOGI("switch_1", "is pressed: %d", switch_1.is_pressed);
+
     ESP_LOGI(encoder_0.label, "value: %f", encoder_0.current_reading);
     ESP_LOGI(encoder_1.label, "value: %f", encoder_1.current_reading);
     ESP_LOGI(encoder_2.label, "value: %f", encoder_2.current_reading);
     ESP_LOGI(encoder_3.label, "value: %f", encoder_3.current_reading);
+
+    ESP_LOGI("", "");
     /* motor_y.control_vars->encoder_target_pos = 0 + 500; */
     /* vTaskDelay(5000 / portTICK_PERIOD_MS); */
     /**/
