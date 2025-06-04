@@ -332,7 +332,7 @@ esp_err_t motor_update_pwm_frequency_immediate(motor_t *motor,
   }
 
   motor->pwm_vars->current_freq_hz = freq; // Update current frequency
-  ESP_LOGI(TAG, "PWM frequency updated immediately to %.2f Hz", freq);
+  /* ESP_LOGI(TAG, "PWM frequency updated immediately to %.2f Hz", freq); */
   return ESP_OK;
 }
 
@@ -368,8 +368,8 @@ void motor_update_timer_cb(void *arg) {
   float *velocity = &motor->pwm_vars->velocity_hz_per_s;
   float max_accel = motor->pwm_vars->max_accel;
 
-  ESP_LOGI(TAG, "Timer callback: current=%.2f, target=%.2f, vel=%.2f",
-           current_freq, target_freq, *velocity);
+  /* ESP_LOGI(TAG, "Timer callback: current=%.2f, target=%.2f, vel=%.2f", */
+  /*          current_freq, target_freq, *velocity); */
 
   // Calculate frequency error
   float freq_error = target_freq - current_freq;
@@ -452,9 +452,9 @@ void motor_update_timer_cb(void *arg) {
     ESP_LOGI(TAG, "PWM deleted at 0 Hz");
   }
 
-  ESP_LOGI(TAG,
-           "Freq: %.2f Hz | Target: %.2f Hz | Vel: %.2f Hz/s | Error: %.2f",
-           new_freq, target_freq, *velocity, freq_error);
+  /* ESP_LOGI(TAG, */
+  /*          "Freq: %.2f Hz | Target: %.2f Hz | Vel: %.2f Hz/s | Error: %.2f", */
+  /*          new_freq, target_freq, *velocity, freq_error); */
 }
 
 esp_err_t motor_init_timer(motor_t *motor) {
@@ -615,7 +615,7 @@ esp_err_t motor_create_pwm_with_frequency(motor_t *motor, float freq_hz) {
     return err;
   }
 
-  ESP_LOGI(TAG, "PWM created for motor %d at freq %.2f Hz (period %u ticks)",
-           motor->id, freq, period_ticks);
+  /* ESP_LOGI(TAG, "PWM created for motor %d at freq %.2f Hz (period %u ticks)", */
+  /*          motor->id, freq, period_ticks); */
   return ESP_OK;
 }
