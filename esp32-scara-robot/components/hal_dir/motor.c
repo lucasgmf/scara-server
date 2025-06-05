@@ -244,8 +244,8 @@ esp_err_t motor_set_target_frequency(motor_t *motor, float target_freq_hz) {
   // Set the target frequency - the timer callback will handle acceleration
   motor->pwm_vars->target_freq_hz = target_freq_hz;
 
-  ESP_LOGI(TAG, "Target frequency set to %.2f Hz (current: %.2f Hz)",
-           target_freq_hz, motor->pwm_vars->current_freq_hz);
+  /* ESP_LOGI(TAG, "Target frequency set to %.2f Hz (current: %.2f Hz)", */
+  /*          target_freq_hz, motor->pwm_vars->current_freq_hz); */
 
   // If timer is not running and we have a non-zero target, start it
   if (target_freq_hz != motor->pwm_vars->current_freq_hz) {
@@ -292,8 +292,8 @@ esp_err_t motor_update_pwm_frequency_immediate(motor_t *motor,
       return err;
     }
     motor->pwm_vars->current_freq_hz = new_freq_hz; // Update current frequency
-    ESP_LOGI(TAG, "PWM recreated for transition from 0 Hz to %.2f Hz",
-             new_freq_hz);
+    /* ESP_LOGI(TAG, "PWM recreated for transition from 0 Hz to %.2f Hz", */
+    /*          new_freq_hz); */
     return ESP_OK;
   }
 
@@ -393,9 +393,10 @@ void motor_update_timer_cb(void *arg) {
 
     // Stop the timer - target reached
     esp_timer_stop(motor->mcpwm_vars->esp_timer_handle);
-    ESP_LOGI(TAG,
-             "Target frequency %.2f Hz reached, stopping acceleration timer",
-             target_freq);
+    /* ESP_LOGI(TAG, */
+    /*          "Target frequency %.2f Hz reached, stopping acceleration timer",
+     */
+    /*          target_freq); */
     return;
   }
 
@@ -453,7 +454,8 @@ void motor_update_timer_cb(void *arg) {
   }
 
   /* ESP_LOGI(TAG, */
-  /*          "Freq: %.2f Hz | Target: %.2f Hz | Vel: %.2f Hz/s | Error: %.2f", */
+  /*          "Freq: %.2f Hz | Target: %.2f Hz | Vel: %.2f Hz/s | Error: %.2f",
+   */
   /*          new_freq, target_freq, *velocity, freq_error); */
 }
 
@@ -615,7 +617,8 @@ esp_err_t motor_create_pwm_with_frequency(motor_t *motor, float freq_hz) {
     return err;
   }
 
-  /* ESP_LOGI(TAG, "PWM created for motor %d at freq %.2f Hz (period %u ticks)", */
+  /* ESP_LOGI(TAG, "PWM created for motor %d at freq %.2f Hz (period %u ticks)",
+   */
   /*          motor->id, freq, period_ticks); */
   return ESP_OK;
 }
