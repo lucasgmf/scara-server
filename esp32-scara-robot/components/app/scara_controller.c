@@ -386,9 +386,9 @@ motor_mcpwm_vars mcpwm_vars_z = {
 
 motor_pwm_vars_t pwm_vars_x = {
     .step_count = 0,
-    .max_freq = 1000,
+    .max_freq = 1100,
     .min_freq = 0,
-    .max_accel = 300,
+    .max_accel = 1500,
     .current_freq_hz = 0,
     .target_freq_hz = 0,
     .dir_is_reversed = false,
@@ -398,7 +398,7 @@ motor_pwm_vars_t pwm_vars_y = {
     .step_count = 0,
     .max_freq = 1000,
     .min_freq = 0,
-    .max_accel = 300,
+    .max_accel = 3000,
     .current_freq_hz = 0,
     .target_freq_hz = 0,
     .dir_is_reversed = false,
@@ -549,8 +549,10 @@ void calibration_initialization_task() {
 
 void loop_scara_task() {
   while (1) {
-    ESP_LOGI("loop_scara_task", "dir 1");
+    /* ESP_LOGI("loop_scara_task", "dir 1"); */
     gpio_set_level(motor_x.gpio_dir, 1);
+    gpio_set_level(motor_y.gpio_dir, 1);
+    gpio_set_level(motor_z.gpio_dir, 1);
     // FIXED: Use max_freq instead of max_accel for target frequency
     motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq);
     motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq);
@@ -562,7 +564,7 @@ void loop_scara_task() {
     motor_set_target_frequency(&motor_z, 0);
     vTaskDelay(3000 / portTICK_PERIOD_MS);
 
-    ESP_LOGI("loop_scara_task", "dir 0");
+    /* ESP_LOGI("loop_scara_task", "dir 0"); */
     gpio_set_level(motor_x.gpio_dir, 0);
     gpio_set_level(motor_y.gpio_dir, 0);
     gpio_set_level(motor_z.gpio_dir, 0);
