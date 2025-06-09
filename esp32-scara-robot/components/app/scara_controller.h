@@ -29,10 +29,12 @@
 #define GPIO_X_DIR GPIO_NUM_16
 #define GPIO_Y_DIR GPIO_NUM_27
 #define GPIO_Z_DIR GPIO_NUM_14
+#define GPIO_B_DIR GPIO_NUM_23
 
 #define GPIO_X_STP GPIO_NUM_26
 #define GPIO_Y_STP GPIO_NUM_25
 #define GPIO_Z_STP GPIO_NUM_17
+#define GPIO_B_STP GPIO_NUM_5
 
 #include "motor_d.h"
 #include "switch_h.h"
