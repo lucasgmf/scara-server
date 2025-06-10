@@ -112,6 +112,7 @@ void tcp_server_task(void *arg) {
 #define MAX_ENCODER_VAL 4096 // 12-bit encoder
 #define HALF_ENCODER_VAL (MAX_ENCODER_VAL / 2)
 
+// Refactored encoder task with better degree handling
 void encoder_task(void *arg) {
   encoder_t *encoder = (encoder_t *)arg;
   if (encoder == NULL) {
@@ -119,49 +120,86 @@ void encoder_task(void *arg) {
     vTaskDelete(NULL);
     return;
   }
-  // first read
+
+  // Configuration validation
+  uint16_t max_encoder_val = encoder->encoder_resolution;
+  int16_t half_encoder_val = max_encoder_val / 2;
+
+  ESP_LOGI(encoder->label,
+           "Starting encoder task - resolution: %d, gear ratio: %.2f",
+           max_encoder_val, encoder->gear_ratio);
+
+  // First read to establish baseline
   uint16_t last_angle = encoder_read_angle(encoder);
+  if (last_angle == 0xFFFF) {
+    ESP_LOGE(encoder->label, "Failed initial encoder read");
+    vTaskDelete(NULL);
+    return;
+  }
 
   uint16_t current_angle;
   int16_t delta;
+  uint32_t error_count = 0;
 
   while (1) {
-
     current_angle = encoder_read_angle(encoder);
 
     if (current_angle == 0xFFFF) {
-      ESP_LOGW(encoder->label, "Failed to read angle");
+      error_count++;
+      ESP_LOGW(encoder->label, "Failed to read angle (error count: %lu)",
+               error_count);
+
+      // If too many consecutive errors, consider resetting or taking action
+      if (error_count > 10) {
+        ESP_LOGE(encoder->label,
+                 "Too many consecutive read errors, continuing...");
+        error_count = 0; // Reset counter
+      }
+
+      vTaskDelay(pdMS_TO_TICKS(100)); // Longer delay on error
       continue;
     }
 
+    error_count = 0; // Reset error counter on successful read
+
+    // Calculate delta with wraparound handling
     delta = (int16_t)current_angle - (int16_t)last_angle;
 
     // Handle wraparound (shortest path)
-    if (delta > HALF_ENCODER_VAL) {
-      delta -= MAX_ENCODER_VAL;
-    } else if (delta < -HALF_ENCODER_VAL) {
-      delta += MAX_ENCODER_VAL;
+    if (delta > half_encoder_val) {
+      delta -= max_encoder_val;
+    } else if (delta < -half_encoder_val) {
+      delta += max_encoder_val;
     }
 
-    // follow "regra da mão direita"
-    delta = delta * (encoder->is_inverted % 2 == 0 ? 1 : -1);
-
+    // Update accumulated steps
     encoder->accumulated_steps += delta;
+
+    // Update angle calculations
+    encoder_update_absolute_angle(encoder);
+
+    // Optional: Log current position periodically
+    /* static uint32_t log_counter = 0; */
+    /* if (++log_counter % 100 == 0) { // Log every 5 seconds at 50ms intervals */
+    /*   ESP_LOGI(encoder->label, */
+    /*            "Raw: %d, Steps: %ld, Motor: %.2f°, Output: %.2f°", */
+    /*            current_angle, encoder->accumulated_steps, */
+    /*            encoder->motor_angle_degrees, encoder->angle_degrees); */
+    /* } */
+    /**/
     last_angle = current_angle;
-
-    /* ESP_LOGI(encoder->label, "Raw angle: %u", current_angle); */
-    /* ESP_LOGI(encoder->label, */
-    /*          "Angle: %u | Delta: %d | Position: %ld | angle_deg: %.2f | " */
-    /*          "angle_rad :%.2f", */
-    /*          current_angle, delta, encoder->accumulated_steps, */
-    /*          encoder->accumulated_steps * 360.0 / 4096 / encoder->gear_ratio,
-     */
-    /*          encoder->accumulated_steps * 2 * M_PI / encoder->gear_ratio / */
-    /*              4096); */
-
     vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
+/* ESP_LOGI(encoder->label, "Raw angle: %u", current_angle); */
+/* ESP_LOGI(encoder->label, */
+/*          "Angle: %u | Delta: %d | Position: %ld | angle_deg: %.2f | " */
+/*          "angle_rad :%.2f", */
+/*          current_angle, delta, encoder->accumulated_steps, */
+/*          encoder->accumulated_steps * 360.0 / 4096 / encoder->gear_ratio,
+ */
+/*          encoder->accumulated_steps * 2 * M_PI / encoder->gear_ratio / */
+/*              4096); */
 
 #define MOTOR_CONTROL_TASK_PERIOD_MS 20
 

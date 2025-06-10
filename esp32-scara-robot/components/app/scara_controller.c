@@ -183,6 +183,7 @@ static encoder_t encoder_0 = {
     .tca_channel = 0,
     .reg_angle_msb = ENCODER_MSB_ANGLE_REG,
     .reg_angle_mask = ENCODER_ANGLE_MASK,
+
     .offset = 0,
     .reverse = false,
     .current_reading = 0,
@@ -193,6 +194,10 @@ static encoder_t encoder_0 = {
     .is_calibrated = false,
     .switch_n = &switch_0,
     .angle_degrees = 0,
+
+    .encoder_resolution = 4096, // Will default to 4096 if 0
+    .offset_degrees = 0.0f,
+    .motor_angle_degrees = 0.0f,
 };
 
 static encoder_t encoder_1 = {
@@ -203,6 +208,7 @@ static encoder_t encoder_1 = {
     .tca_channel = 1,
     .reg_angle_msb = ENCODER_MSB_ANGLE_REG,
     .reg_angle_mask = ENCODER_ANGLE_MASK,
+
     .offset = 0,
     .reverse = false,
     .current_reading = 0,
@@ -211,8 +217,12 @@ static encoder_t encoder_1 = {
     .gear_ratio = 62.0 / 18.0,
     .test_offset = 706,
     .is_calibrated = false,
-    .switch_n = &switch_0,
+    .switch_n = &switch_1,
     .angle_degrees = 0,
+
+    .encoder_resolution = 4096, // Will default to 4096 if 0
+    .offset_degrees = 0.0f,
+    .motor_angle_degrees = 0.0f,
 };
 
 static encoder_t encoder_2 = {
@@ -223,14 +233,21 @@ static encoder_t encoder_2 = {
     .tca_channel = 2,
     .reg_angle_msb = ENCODER_MSB_ANGLE_REG,
     .reg_angle_mask = ENCODER_ANGLE_MASK,
+
     .offset = 0,
     .reverse = false,
     .current_reading = 0,
     .accumulated_steps = 0,
     .is_inverted = 1,
-    .gear_ratio = 62.0 / 18.0,
+    .gear_ratio = 2,
     .test_offset = 706,
     .is_calibrated = false,
+    .switch_n = &switch_1,
+    .angle_degrees = 0,
+
+    .encoder_resolution = 4096, // Will default to 4096 if 0
+    .offset_degrees = 0.0f,
+    .motor_angle_degrees = 0.0f,
 };
 
 static encoder_t encoder_3 = {
@@ -241,15 +258,21 @@ static encoder_t encoder_3 = {
     .tca_channel = 3,
     .reg_angle_msb = ENCODER_MSB_ANGLE_REG,
     .reg_angle_mask = ENCODER_ANGLE_MASK,
+
     .offset = 0,
     .reverse = false,
     .current_reading = 0,
     .accumulated_steps = 0,
     .is_inverted = 1,
-    .gear_ratio = 62.0 / 18.0,
+    .gear_ratio = 1,
     .test_offset = 706,
     .is_calibrated = false,
+    /* .switch_n = &switch_1, */
     .angle_degrees = 0,
+
+    .encoder_resolution = 4096, // Will default to 4096 if 0
+    .offset_degrees = 0.0f,
+    .motor_angle_degrees = 0.0f,
 };
 
 #include "stdlib.h"
@@ -650,10 +673,10 @@ void loop_scara_readings() {
     ESP_LOGI("switch_0", "is pressed: %d", switch_0.is_pressed);
     ESP_LOGI("switch_1", "is pressed: %d", switch_1.is_pressed);
 
-    ESP_LOGI(encoder_0.label, "value: %f", encoder_0.current_reading);
-    ESP_LOGI(encoder_1.label, "value: %f", encoder_1.current_reading);
-    ESP_LOGI(encoder_2.label, "value: %f", encoder_2.current_reading);
-    ESP_LOGI(encoder_3.label, "value: %f", encoder_3.current_reading);
+    ESP_LOGI(encoder_0.label, "value: %f", encoder_0.angle_degrees);
+    ESP_LOGI(encoder_1.label, "value: %f", encoder_1.angle_degrees);
+    ESP_LOGI(encoder_2.label, "value: %f", encoder_2.angle_degrees);
+    ESP_LOGI(encoder_3.label, "value: %f", encoder_3.angle_degrees);
 
     ESP_LOGI("", "");
     /* ESP_LOGI("loop_scara_readings", "motor freq: %f", */
