@@ -647,28 +647,28 @@ void loop_scara_task() {
 
 void loop_scara_readings() {
   while (1) {
-    /* ESP_LOGI("switch_0", "is pressed: %d", switch_0.is_pressed); */
-    /* ESP_LOGI("switch_1", "is pressed: %d", switch_1.is_pressed); */
-    /**/
-    /* ESP_LOGI(encoder_0.label, "value: %f", encoder_0.current_reading); */
-    /* ESP_LOGI(encoder_1.label, "value: %f", encoder_1.current_reading); */
-    /* ESP_LOGI(encoder_2.label, "value: %f", encoder_2.current_reading); */
-    /* ESP_LOGI(encoder_3.label, "value: %f", encoder_3.current_reading); */
-    /**/
-    /* ESP_LOGI("", ""); */
-    ESP_LOGI("loop_scara_readings", "motor freq: %f",
-             motor_b.pwm_vars->current_freq_hz);
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    ESP_LOGI("switch_0", "is pressed: %d", switch_0.is_pressed);
+    ESP_LOGI("switch_1", "is pressed: %d", switch_1.is_pressed);
+
+    ESP_LOGI(encoder_0.label, "value: %f", encoder_0.current_reading);
+    ESP_LOGI(encoder_1.label, "value: %f", encoder_1.current_reading);
+    ESP_LOGI(encoder_2.label, "value: %f", encoder_2.current_reading);
+    ESP_LOGI(encoder_3.label, "value: %f", encoder_3.current_reading);
+
+    ESP_LOGI("", "");
+    /* ESP_LOGI("loop_scara_readings", "motor freq: %f", */
+    /* motor_b.pwm_vars->current_freq_hz); */
+    vTaskDelay(250 / portTICK_PERIOD_MS);
   }
   return;
 }
 void init_scara() {
   /* wifi_initialization_func(); */
-  /* switch_initialization_task(); */
-  /* encoder_initialization_task(); */
+  switch_initialization_task();
+  encoder_initialization_task();
   motor_initialization_task();
 
-  xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL);
+  /* xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL); */
   xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL);
   /* xTaskCreate(loop_scara_readings, "readings", 4096, NULL, 5, NULL); */
 
