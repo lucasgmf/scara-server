@@ -630,7 +630,7 @@ void calibration_initialization_task() {
   gpio_set_level(motor_b.gpio_dir, false);
 
   while (!motor_x.control_vars->ref_switch->is_pressed) {
-    motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq / 5);
+    motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq / 2.5);
   }
   motor_set_target_frequency(&motor_x, 0);
 
@@ -704,10 +704,10 @@ void init_scara() {
   encoder_initialization_task();
   motor_initialization_task();
 
-  /* xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL); */
+  xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL);
   xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL);
   /* xTaskCreate(loop_scara_readings, "readings", 4096, NULL, 5, NULL); */
 
-  calibration_initialization_task();
+  /* calibration_initialization_task(); */
   ESP_LOGI(TAG, "");
 }
