@@ -353,29 +353,6 @@ void encoder_initialization_task() {
 /* 4	1	0	0 */
 /* 5	1	1	1 */
 /* 6	1	2	2 */
-// TODO: FIX acceleration in the 0 transition!
-
-#define MOTOR_X_LABEL "Motor x"
-#define MOTOR_X_ID 0
-
-#define MOTOR_Y_LABEL "Motor y"
-#define MOTOR_Y_ID 1
-
-#define MOTOR_Z_LABEL "Motor z"
-#define MOTOR_Z_ID 2
-
-#define MOTOR_A_LABEL "Motor a"
-#define MOTOR_A_ID 3
-
-#define MOTOR_B_LABEL "Motor b"
-#define MOTOR_B_ID 4
-
-#define MCPWM_MAX_PERIOD_TICKS 60000 // WARN: maybe change this
-#define MCPWM_MIN_PERIOD_TICKS 5
-#define PWM_RESOLUTION_HZ 1000000
-/* #define PWM_MAX_FREQ_HZ 300 // 1100 */
-/* #define PWM_MIN_FREQ_HZ 1 */
-/* #define PWM_MAX_ACCEL_HZ 3000 */
 
 motor_mcpwm_vars mcpwm_vars_x = {
     .group_unit = 0,
@@ -402,6 +379,18 @@ motor_mcpwm_vars mcpwm_vars_y = {
 };
 
 motor_mcpwm_vars mcpwm_vars_z = {
+    .group_unit = 1,
+    .timer = NULL,
+    .operator= NULL,
+    .comparator = NULL,
+    .generator = NULL,
+    .esp_timer_handle = 0,
+    .mcpwm_min_period_ticks = MCPWM_MIN_PERIOD_TICKS,
+    .mcpwm_max_period_ticks = MCPWM_MAX_PERIOD_TICKS,
+    .pwm_resolution_hz = PWM_RESOLUTION_HZ,
+};
+
+motor_mcpwm_vars mcpwm_vars_a = {
     .group_unit = 1,
     .timer = NULL,
     .operator= NULL,
@@ -454,6 +443,16 @@ motor_pwm_vars_t pwm_vars_z = {
     .dir_is_reversed = false,
 };
 
+motor_pwm_vars_t pwm_vars_a = {
+    .step_count = 0,
+    .max_freq = 1000,
+    .min_freq = 0,
+    .max_accel = 3000,
+    .current_freq_hz = 0,
+    .target_freq_hz = 0,
+    .dir_is_reversed = false,
+};
+
 motor_pwm_vars_t pwm_vars_b = {
     .step_count = 0,
     .max_freq = 1000,
@@ -482,6 +481,12 @@ pid_controller_t pid_motor_z = {
     .Kd = 0.0, // 0.2
 };
 
+pid_controller_t pid_motor_a = {
+    .Kp = 0.1, // 1
+    .Ki = 0.0, // 0.01
+    .Kd = 0.0, // 0.2
+};
+
 pid_controller_t pid_motor_b = {
     .Kp = 0.1, // 1
     .Ki = 0.0, // 0.01
@@ -504,13 +509,20 @@ motor_control_vars control_vars_y = {
 };
 
 motor_control_vars control_vars_z = {
-    .ref_encoder = &encoder_2,
+    .ref_encoder = &encoder_1,
     .encoder_target_pos = 0,
     .enable_pid = false,
     .pid = &pid_motor_z,
     .ref_switch = &switch_1,
 };
 
+motor_control_vars control_vars_a = {
+    .ref_encoder = &encoder_2,
+    .encoder_target_pos = 0,
+    .enable_pid = false,
+    .pid = &pid_motor_a,
+    /* .ref_switch = &switch_1, */
+};
 motor_control_vars control_vars_b = {
     .ref_encoder = &encoder_3,
     .encoder_target_pos = 0,
@@ -552,6 +564,16 @@ motor_t motor_z = {
     .is_inverted = false,
 };
 
+motor_t motor_a = {
+    .label = MOTOR_A_LABEL,
+    .id = MOTOR_A_ID,
+    .gpio_stp = GPIO_A_STP,
+    .gpio_dir = GPIO_A_DIR,
+    .mcpwm_vars = &mcpwm_vars_a,
+    .pwm_vars = &pwm_vars_a,
+    .control_vars = &control_vars_a,
+    .is_inverted = false,
+};
 motor_t motor_b = {
     .label = MOTOR_B_LABEL,
     .id = MOTOR_B_ID,
@@ -562,6 +584,7 @@ motor_t motor_b = {
     .control_vars = &control_vars_b,
     .is_inverted = false,
 };
+
 void motor_initialization_task() {
   esp_err_t err;
 
@@ -603,24 +626,14 @@ void calibration_initialization_task() {
   gpio_set_level(motor_x.gpio_dir, false);
   gpio_set_level(motor_y.gpio_dir, false);
   gpio_set_level(motor_z.gpio_dir, false);
+  gpio_set_level(motor_a.gpio_dir, false);
   gpio_set_level(motor_b.gpio_dir, false);
 
-  while (1) {
-
-    while (!motor_y.control_vars->ref_switch->is_pressed) {
-      /* motor_set_frequency(&motor_y, 200); */
-      /* motor_set_frequency(&motor_x, 0); */
-      motor_set_target_frequency(&motor_z, 500);
-      vTaskDelay(50);
-    }
-    while (!motor_x.control_vars->ref_switch->is_pressed) {
-      vTaskDelay(50);
-    }
-    if (motor_x.control_vars->ref_switch->is_pressed &&
-        motor_y.control_vars->ref_switch->is_pressed)
-      break;
-    vTaskDelay(50);
+  while (!motor_x.control_vars->ref_switch->is_pressed) {
+    motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq / 5);
   }
+  motor_set_target_frequency(&motor_x, 0);
+
   return;
 }
 
@@ -695,6 +708,6 @@ void init_scara() {
   xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL);
   /* xTaskCreate(loop_scara_readings, "readings", 4096, NULL, 5, NULL); */
 
-  /* calibration_initialization_task(); */
+  calibration_initialization_task();
   ESP_LOGI(TAG, "");
 }
