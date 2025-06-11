@@ -415,9 +415,9 @@ motor_mcpwm_vars mcpwm_vars_b = {
 };
 motor_pwm_vars_t pwm_vars_x = {
     .step_count = 0,
-    .max_freq = 1100,
+    .max_freq = 800,
     .min_freq = 0,
-    .max_accel = 1500,
+    .max_accel = 3000,
     .current_freq_hz = 0,
     .target_freq_hz = 0,
     .dir_is_reversed = false,
@@ -701,7 +701,7 @@ void loop_scara_readings() {
 void init_scara() {
   /* wifi_initialization_func(); */
   switch_initialization_task();
-  encoder_initialization_task();
+  /* encoder_initialization_task(); */
   motor_initialization_task();
 
   xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL);
