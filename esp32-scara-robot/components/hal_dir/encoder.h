@@ -22,7 +22,7 @@ typedef struct {
   uint16_t reg_angle_mask;
 
   // Legacy compatibility fields
-  float offset;          // raw offset (for backward compatibility)
+  float initial_offset;
   bool reverse;          // legacy reverse flag
   float current_reading; // legacy current reading
 
@@ -53,6 +53,5 @@ float encoder_get_angle_degrees(encoder_t *encoder);
 float encoder_get_motor_angle_degrees(encoder_t *encoder);
 int32_t encoder_get_accumulated_steps(encoder_t *encoder);
 esp_err_t encoder_zero_position(encoder_t *encoder);
-
 
 #endif // ENCODER_H

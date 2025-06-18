@@ -3,7 +3,6 @@
 #define DEFAULT_ENCODER_RESOLUTION 4096
 #define DEGREES_PER_REVOLUTION 360.0f
 
-// Calculate degrees from raw encoder value
 float encoder_raw_to_degrees(encoder_t *encoder, uint16_t raw_value) {
   if (!encoder)
     return 0.0f;
@@ -24,7 +23,6 @@ float encoder_raw_to_degrees(encoder_t *encoder, uint16_t raw_value) {
   return degrees;
 }
 
-// Calculate absolute angle from accumulated steps
 void encoder_update_absolute_angle(encoder_t *encoder) {
   if (!encoder)
     return;
@@ -69,7 +67,6 @@ esp_err_t encoder_init(encoder_t *encoder) {
                                    encoder->i2c_slave->dev_handle);
 }
 
-// Your existing read function with minor improvements
 uint16_t encoder_read_angle(encoder_t *encoder) {
   uint8_t reg = encoder->reg_angle_msb;
   uint8_t data[2];
@@ -142,7 +139,7 @@ esp_err_t encoder_zero_position(encoder_t *encoder) {
   if (!encoder)
     return ESP_ERR_INVALID_ARG;
 
-  encoder->accumulated_steps = 0;
+  encoder->accumulated_steps = encoder->initial_offset;
   encoder->angle_degrees = 0.0f;
   encoder->motor_angle_degrees = 0.0f;
   encoder->is_calibrated = true;
