@@ -185,12 +185,13 @@ static encoder_t encoder_0 = {
     .reg_angle_mask = ENCODER_ANGLE_MASK,
 
     .offset = 0,
+    .initial_offset = 3906,
     .reverse = false,
     .current_reading = 0,
     .accumulated_steps = 0,
     .is_inverted = 1,
     .gear_ratio = 62.0 / 18.0,
-    .test_offset = 706,
+    .test_offset = 0,
     .is_calibrated = false,
     .switch_n = &switch_0,
     .angle_degrees = 0,
@@ -209,7 +210,7 @@ static encoder_t encoder_1 = {
     .reg_angle_msb = ENCODER_MSB_ANGLE_REG,
     .reg_angle_mask = ENCODER_ANGLE_MASK,
 
-    .offset = 0,
+    .initial_offset = -5876,
     .reverse = false,
     .current_reading = 0,
     .accumulated_steps = 0,
@@ -234,7 +235,7 @@ static encoder_t encoder_2 = {
     .reg_angle_msb = ENCODER_MSB_ANGLE_REG,
     .reg_angle_mask = ENCODER_ANGLE_MASK,
 
-    .offset = 0,
+    .initial_offset = 0,
     .reverse = false,
     .current_reading = 0,
     .accumulated_steps = 0,
@@ -259,7 +260,7 @@ static encoder_t encoder_3 = {
     .reg_angle_msb = ENCODER_MSB_ANGLE_REG,
     .reg_angle_mask = ENCODER_ANGLE_MASK,
 
-    .offset = 0,
+    .initial_offset = 0,
     .reverse = false,
     .current_reading = 0,
     .accumulated_steps = 0,
@@ -307,6 +308,7 @@ void encoder_initialization_task() {
 
   ESP_ERROR_CHECK(
       tca_select_channel(encoder_0.tca_channel, encoder_0.i2c_tca->dev_handle));
+
   ESP_ERROR_CHECK(i2c_master_bus_add_device(
       *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_0.dev_cfg,
       i2c_slave_conf_encoder_0.dev_handle));
@@ -331,6 +333,7 @@ void encoder_initialization_task() {
       *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_3.dev_cfg,
       i2c_slave_conf_encoder_3.dev_handle));
   ESP_ERROR_CHECK(encoder_init(&encoder_3));
+
   xTaskCreate(encoder_task, "encoder0_task", 4096, &encoder_0, 5, NULL);
   xTaskCreate(encoder_task, "encoder1_task", 4096, &encoder_1, 5, NULL);
   xTaskCreate(encoder_task, "encoder2_task", 4096, &encoder_2, 5, NULL);
@@ -437,7 +440,7 @@ motor_pwm_vars_t pwm_vars_z = {
     .step_count = 0,
     .max_freq = 1000,
     .min_freq = 0,
-    .max_accel = 300,
+    .max_accel = 3000,
     .current_freq_hz = 0,
     .target_freq_hz = 0,
     .dir_is_reversed = false,
@@ -445,9 +448,9 @@ motor_pwm_vars_t pwm_vars_z = {
 
 motor_pwm_vars_t pwm_vars_a = {
     .step_count = 0,
-    .max_freq = 1000,
+    .max_freq = 100,
     .min_freq = 0,
-    .max_accel = 3000,
+    .max_accel = 1000,
     .current_freq_hz = 0,
     .target_freq_hz = 0,
     .dir_is_reversed = false,
@@ -470,13 +473,13 @@ pid_controller_t pid_motor_x = {
 };
 
 pid_controller_t pid_motor_y = {
-    .Kp = 0.1, // 1
-    .Ki = 0.0, // 0.01
-    .Kd = 0.0, // 0.2
+    .Kp = 0.2 * 4, // 1
+    .Ki = 0.0025,  // 0.01
+    .Kd = 0.0,     // 0.2
 };
 
 pid_controller_t pid_motor_z = {
-    .Kp = 0.1, // 1
+    .Kp = 0.1 * 5, // 1
     .Ki = 0.0, // 0.01
     .Kd = 0.0, // 0.2
 };
@@ -561,7 +564,7 @@ motor_t motor_z = {
     .mcpwm_vars = &mcpwm_vars_z,
     .pwm_vars = &pwm_vars_z,
     .control_vars = &control_vars_z,
-    .is_inverted = false,
+    .is_inverted = true,
 };
 
 motor_t motor_a = {
@@ -609,30 +612,83 @@ void motor_initialization_task() {
     ESP_LOGE(TAG, "Failed to initialize timer for motor Z");
   }
 
+  motor_init_dir(&motor_a);
+  motor_create_pwm(&motor_a);
+  err = motor_init_timer(&motor_a);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to initialize timer for motor A");
+  }
   motor_init_dir(&motor_b);
   motor_create_pwm(&motor_b);
   err = motor_init_timer(&motor_b);
   if (err != ESP_OK) {
-    ESP_LOGE(TAG, "Failed to initialize timer for motor Z");
+    ESP_LOGE(TAG, "Failed to initialize timer for motor B");
   }
 
   ESP_LOGI(TAG, "All motors initialized successfully");
   /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_x, 5, NULL); */
-  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_y, 5, NULL); */
+  xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_y, 5, NULL);
+  xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_z, 5, NULL);
   return;
 }
 
 void calibration_initialization_task() {
   gpio_set_level(motor_x.gpio_dir, false);
   gpio_set_level(motor_y.gpio_dir, false);
-  gpio_set_level(motor_z.gpio_dir, false);
+  gpio_set_level(motor_z.gpio_dir, true);
   gpio_set_level(motor_a.gpio_dir, false);
   gpio_set_level(motor_b.gpio_dir, false);
 
-  while (!motor_x.control_vars->ref_switch->is_pressed) {
-    motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq / 2.5);
+  /* motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq / 2); */
+  /* while (!motor_x.control_vars->ref_switch->is_pressed) { */
+  /*   ESP_LOGI("calibration_initialization_task", "calibrating motor_x"); */
+  /*   vTaskDelay(20); */
+  /* } */
+
+  /* motor_set_target_frequency(&motor_x, 0); */
+  // set new value ...
+
+  motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq / 4);
+  while (!motor_y.control_vars->ref_switch->is_pressed) {
+    ESP_LOGI("calibration_initialization_task", "calibrating motor_y");
+    vTaskDelay(20);
   }
-  motor_set_target_frequency(&motor_x, 0);
+  motor_set_target_frequency(&motor_y, 0);
+  encoder_zero_position(motor_y.control_vars->ref_encoder);
+  motor_y.control_vars->encoder_target_pos = 0;
+
+  vTaskDelay(2000 / portTICK_PERIOD_MS);
+
+  while (!motor_z.control_vars->ref_switch->is_pressed) {
+    motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq / 4);
+    ESP_LOGI("calibration_initialization_task", "calibrating motor_z");
+    vTaskDelay(20);
+  }
+  ESP_LOGI("calibration_initialization_task", "finished motor_z cal");
+  motor_set_target_frequency(&motor_z, 0);
+  encoder_zero_position(motor_z.control_vars->ref_encoder);
+  motor_z.control_vars->encoder_target_pos = 0;
+
+  /* motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq); */
+  /* while (!motor_y.control_vars->ref_switch->is_pressed) { */
+  /*   ESP_LOGI("calibration_initialization_task", "calibrating motor_z"); */
+  /*   vTaskDelay(20); */
+  /* } */
+  /* motor_set_target_frequency(&motor_z, 0); */
+  /* encoder_zero_position(motor_z.control_vars->ref_encoder); */
+  /* motor_z.control_vars->encoder_target_pos = 0; */
+
+  while (1) {
+    vTaskDelay(5000);
+  }
+
+  /* // go to middle */
+  /* motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq / 4); */
+  /* while (!motor_z.control_vars->ref_switch->is_pressed) { */
+  /*   ESP_LOGI("calibration_initialization_task", "calibrating motor_z"); */
+  /*   vTaskDelay(20); */
+  /* } */
+  // set new value
 
   return;
 }
@@ -643,41 +699,47 @@ void calibration_initialization_task() {
 
 void loop_scara_task() {
   while (1) {
-    /* ESP_LOGI("loop_scara_task", "dir 1"); */
-    gpio_set_level(motor_x.gpio_dir, 1);
-    gpio_set_level(motor_y.gpio_dir, 1);
+    ESP_LOGI("loop_scara_task", "dir 1");
+    /* gpio_set_level(motor_x.gpio_dir, 1); */
+    /* gpio_set_level(motor_y.gpio_dir, 1); */
     gpio_set_level(motor_z.gpio_dir, 1);
-    gpio_set_level(motor_b.gpio_dir, 1);
+    /* gpio_set_level(motor_a.gpio_dir, 1); */
+    /* gpio_set_level(motor_b.gpio_dir, 1); */
 
-    motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq);
-    motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq);
+    /* motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq); */
+    /* motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq); */
     motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq);
-    motor_set_target_frequency(&motor_b, motor_b.pwm_vars->max_freq);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    /* motor_set_target_frequency(&motor_a, motor_a.pwm_vars->max_freq); */
+    /* motor_set_target_frequency(&motor_b, motor_b.pwm_vars->max_freq); */
+    vTaskDelay(3000 / portTICK_PERIOD_MS);
 
-    motor_set_target_frequency(&motor_x, 0);
-    motor_set_target_frequency(&motor_y, 0);
+    /* motor_set_target_frequency(&motor_x, 0); */
+    /* motor_set_target_frequency(&motor_y, 0); */
     motor_set_target_frequency(&motor_z, 0);
-    motor_set_target_frequency(&motor_b, 0);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    /* motor_set_target_frequency(&motor_a, 0); */
+    /* motor_set_target_frequency(&motor_b, 0); */
+    vTaskDelay(3000 / portTICK_PERIOD_MS);
 
     /* ESP_LOGI("loop_scara_task", "dir 0"); */
-    gpio_set_level(motor_x.gpio_dir, 0);
-    gpio_set_level(motor_y.gpio_dir, 0);
+    /* gpio_set_level(motor_x.gpio_dir, 0); */
+    /* gpio_set_level(motor_y.gpio_dir, 0); */
     gpio_set_level(motor_z.gpio_dir, 0);
-    gpio_set_level(motor_b.gpio_dir, 0);
+    /* gpio_set_level(motor_a.gpio_dir, 0); */
+    /* gpio_set_level(motor_b.gpio_dir, 0); */
 
-    motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq);
-    motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq);
+    /* motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq); */
+    /* motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq); */
     motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq);
-    motor_set_target_frequency(&motor_b, motor_b.pwm_vars->max_freq);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    /* motor_set_target_frequency(&motor_a, motor_a.pwm_vars->max_freq); */
+    /* motor_set_target_frequency(&motor_b, motor_b.pwm_vars->max_freq); */
+    vTaskDelay(3000 / portTICK_PERIOD_MS);
 
-    motor_set_target_frequency(&motor_x, 0);
-    motor_set_target_frequency(&motor_y, 0);
+    /* motor_set_target_frequency(&motor_x, 0); */
+    /* motor_set_target_frequency(&motor_y, 0); */
     motor_set_target_frequency(&motor_z, 0);
-    motor_set_target_frequency(&motor_b, 0);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    /* motor_set_target_frequency(&motor_a, 0); */
+    /* motor_set_target_frequency(&motor_b, 0); */
+    vTaskDelay(3000 / portTICK_PERIOD_MS);
   }
 }
 
@@ -688,8 +750,13 @@ void loop_scara_readings() {
 
     ESP_LOGI(encoder_0.label, "value: %f", encoder_0.angle_degrees);
     ESP_LOGI(encoder_1.label, "value: %f", encoder_1.angle_degrees);
-    ESP_LOGI(encoder_2.label, "value: %f", encoder_2.angle_degrees);
-    ESP_LOGI(encoder_3.label, "value: %f", encoder_3.angle_degrees);
+    /* ESP_LOGI(encoder_2.label, "value: %f", encoder_2.angle_degrees); */
+    /* ESP_LOGI(encoder_3.label, "value: %f", encoder_3.angle_degrees); */
+
+    ESP_LOGI(encoder_0.label, "value: %d", encoder_0.accumulated_steps);
+    ESP_LOGI(encoder_1.label, "value: %d", encoder_1.accumulated_steps);
+    /* ESP_LOGI(encoder_2.label, "value: %d", encoder_2.accumulated_steps); */
+    /* ESP_LOGI(encoder_3.label, "value: %d", encoder_3.accumulated_steps); */
 
     ESP_LOGI("", "");
     /* ESP_LOGI("loop_scara_readings", "motor freq: %f", */
@@ -701,13 +768,12 @@ void loop_scara_readings() {
 void init_scara() {
   /* wifi_initialization_func(); */
   switch_initialization_task();
-  /* encoder_initialization_task(); */
+  encoder_initialization_task();
   motor_initialization_task();
 
-  xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL);
+  /* xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL); */
   xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL);
-  /* xTaskCreate(loop_scara_readings, "readings", 4096, NULL, 5, NULL); */
+  calibration_initialization_task();
 
-  /* calibration_initialization_task(); */
   ESP_LOGI(TAG, "");
 }
