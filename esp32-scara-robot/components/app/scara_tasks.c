@@ -112,7 +112,6 @@ void tcp_server_task(void *arg) {
 #define MAX_ENCODER_VAL 4096 // 12-bit encoder
 #define HALF_ENCODER_VAL (MAX_ENCODER_VAL / 2)
 
-// Refactored encoder task with better degree handling
 void encoder_task(void *arg) {
   encoder_t *encoder = (encoder_t *)arg;
   if (encoder == NULL) {
@@ -217,14 +216,14 @@ void motor_control_task(void *arg) {
 
   while (1) {
 
-    /* if (!motor->control_vars->ref_encoder->is_calibrated) { */
+    if (!motor->control_vars->ref_encoder->is_calibrated) {
     /* ESP_LOGI("motor_control_task", "encoder is not calibrated"); */
-    /*   vTaskDelay(pdMS_TO_TICKS(MOTOR_CONTROL_TASK_PERIOD_MS)); */
-    /*   continue; */
-    /* } */
+      vTaskDelay(pdMS_TO_TICKS(MOTOR_CONTROL_TASK_PERIOD_MS));
+      continue;
+    }
 
     error = motor->control_vars->encoder_target_pos -
-            motor->control_vars->ref_encoder->current_reading;
+            motor->control_vars->ref_encoder->accumulated_steps;
 
     const float DEAD_BAND_THRESHOLD = 2.0f;            // WARN: define this
     float dt = MOTOR_CONTROL_TASK_PERIOD_MS / 1000.0f; // Time in seconds
@@ -284,11 +283,11 @@ void motor_control_task(void *arg) {
     bool reverse = output < 0;
 
     // TODO: If direction is the same as previous, do not set level again...
-    ESP_LOGW("debug", "setting dir to %d",
-             motor->pwm_vars->dir_is_reversed ? reverse : !reverse);
+    /* ESP_LOGW("debug", "setting dir to %d", */
+    /*          motor->pwm_vars->dir_is_reversed ? !reverse : !reverse); */
 
     gpio_set_level(motor->gpio_dir,
-                   motor->pwm_vars->dir_is_reversed ? reverse : !reverse);
+                   motor->pwm_vars->dir_is_reversed ? !reverse : reverse);
 
     // Apply new frequency to motor
     motor_set_target_frequency(motor, local_target_freq_hz);
