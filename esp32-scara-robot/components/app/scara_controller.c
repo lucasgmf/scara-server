@@ -184,7 +184,6 @@ static encoder_t encoder_0 = {
     .reg_angle_msb = ENCODER_MSB_ANGLE_REG,
     .reg_angle_mask = ENCODER_ANGLE_MASK,
 
-    .offset = 0,
     .initial_offset = 3906,
     .reverse = false,
     .current_reading = 0,
