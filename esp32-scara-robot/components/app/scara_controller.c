@@ -479,8 +479,8 @@ pid_controller_t pid_motor_y = {
 
 pid_controller_t pid_motor_z = {
     .Kp = 0.1 * 5, // 1
-    .Ki = 0.0, // 0.01
-    .Kd = 0.0, // 0.2
+    .Ki = 0.0,     // 0.01
+    .Kd = 0.0,     // 0.2
 };
 
 pid_controller_t pid_motor_a = {
@@ -764,15 +764,112 @@ void loop_scara_readings() {
   }
   return;
 }
+
+#include "loadcell.h"
+
+hx711_config_t hx711_config = {
+    .data_pin = HX711_DATA_PIN,
+    .clock_pin = HX711_CLOCK_PIN,
+    .gain = HX711_GAIN_128,
+    .offset = 0,
+    .scale = 1.0f,
+};
+
+void calibration_task(void *pvParameters) {
+  ESP_LOGI(TAG, "Starting calibration process...");
+
+  // Wait a bit for system to stabilize
+  vTaskDelay(2000 / portTICK_PERIOD_MS);
+
+  // Step 1: Tare the scale
+  ESP_LOGI(TAG, "Please ensure no weight is on the scale");
+  ESP_LOGI(TAG, "Taring in 5 seconds...");
+  vTaskDelay(5000 / portTICK_PERIOD_MS);
+
+  hx711_tare(&hx711_config, 10); // Average of 10 readings
+
+  // Step 2: Calibrate with known weight
+  ESP_LOGI(TAG, "Please place a known weight on the scale");
+  ESP_LOGI(TAG, "Calibrating in 10 seconds...");
+  vTaskDelay(10000 / portTICK_PERIOD_MS);
+
+  // Change this value to match your calibration weight
+  float calibration_weight = 100.0f; // 100 grams
+  hx711_calibrate(&hx711_config, calibration_weight, 10);
+
+  ESP_LOGI(TAG, "Calibration complete!");
+  ESP_LOGI(TAG, "Offset: %ld, Scale: %.6f", hx711_config.offset,
+           hx711_config.scale);
+
+  // Delete this task as calibration is done
+  vTaskDelete(NULL);
+}
+
+void display_task(void *pvParameters) {
+  ESP_LOGI(TAG, "Display task started");
+
+  while (1) {
+    if (g_hx711_data.data_ready) {
+      ESP_LOGI(TAG, "Weight: %.2f g (%.3f kg) | Raw: %ld | Updated: %lu ms ago",
+               g_hx711_data.weight_grams, g_hx711_data.weight_kg,
+               g_hx711_data.raw_value,
+               (esp_timer_get_time() / 1000) - g_hx711_data.last_update_ms);
+    } else {
+      ESP_LOGW(TAG, "No data available from HX711");
+    }
+
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
+}
+
+void force_sensor_initialization_func() {
+  ESP_LOGI(TAG, "Force Sensor Application Starting...");
+
+  // Initialize HX711
+  esp_err_t ret = hx711_init(&hx711_config);
+  if (ret != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to initialize HX711: %s", esp_err_to_name(ret));
+    ESP_LOGE(TAG, "Please check:");
+    ESP_LOGE(TAG, "1. HX711 VDD connected to 3.3V or 5V");
+    ESP_LOGE(TAG, "2. HX711 GND connected to ESP32 GND");
+    ESP_LOGE(TAG, "3. HX711 DT connected to GPIO 4");
+    ESP_LOGE(TAG, "4. HX711 SCK connected to GPIO 2");
+    ESP_LOGE(TAG, "5. Load cell properly connected to HX711");
+    ESP_LOGE(TAG, "6. Power supply adequate for both ESP32 and HX711");
+    return;
+  }
+
+  // Create calibration task (runs once)
+  xTaskCreate(calibration_task, "calibration_task", 4096, NULL, 5, NULL);
+
+  // Create HX711 reading task
+  xTaskCreate(hx711_task, "hx711_task", 4096, &hx711_config, 6, NULL);
+
+  // Create display task
+  xTaskCreate(display_task, "display_task", 4096, NULL, 4, NULL);
+
+  ESP_LOGI(TAG, "All tasks created successfully");
+
+  while (1) {
+    // Example: Access global data structure
+    if (g_hx711_data.data_ready) {
+      // You can use g_hx711_data.weight_grams, g_hx711_data.weight_kg, etc.
+      // from anywhere in your application
+    }
+
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
+  }
+}
 void init_scara() {
+  force_sensor_initialization_func();
   /* wifi_initialization_func(); */
-  switch_initialization_task();
-  encoder_initialization_task();
-  motor_initialization_task();
+  /* switch_initialization_task(); */
+  /* encoder_initialization_task(); */
+  /* motor_initialization_task(); */
 
   /* xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL); */
-  xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL);
-  calibration_initialization_task();
+  /* xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL); */
+  /* calibration_initialization_task(); */
 
   ESP_LOGI(TAG, "");
 }
