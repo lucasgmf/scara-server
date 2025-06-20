@@ -2,5 +2,4 @@
 
 void app_main(void) {
   init_scara();
-  loop_scara();
 }

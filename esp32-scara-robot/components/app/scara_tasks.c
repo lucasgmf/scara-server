@@ -119,63 +119,86 @@ void encoder_task(void *arg) {
     vTaskDelete(NULL);
     return;
   }
-  // first read
+
+  // Configuration validation
+  uint16_t max_encoder_val = encoder->encoder_resolution;
+  int16_t half_encoder_val = max_encoder_val / 2;
+
+  ESP_LOGI(encoder->label,
+           "Starting encoder task - resolution: %d, gear ratio: %.2f",
+           max_encoder_val, encoder->gear_ratio);
+
+  // First read to establish baseline
   uint16_t last_angle = encoder_read_angle(encoder);
-
-  uint16_t current_angle;
-  int16_t delta;
-
-  while (1) {
-
-    current_angle = encoder_read_angle(encoder);
-
-    if (current_angle == 0xFFFF) {
-      ESP_LOGW(encoder->label, "Failed to read angle");
-    }
-
-    delta = (int16_t)current_angle - (int16_t)last_angle;
-
-    // Handle wraparound (shortest path)
-    if (delta > HALF_ENCODER_VAL) {
-      delta -= MAX_ENCODER_VAL;
-    } else if (delta < -HALF_ENCODER_VAL) {
-      delta += MAX_ENCODER_VAL;
-    }
-
-    // follow "regra da mão direita"
-    delta = delta * (encoder->is_inverted % 2 == 0 ? 1 : -1);
-
-    encoder->accumulated_steps += delta;
-    last_angle = current_angle;
-
-    ESP_LOGI(encoder->label, "Raw angle: %u", current_angle);
-    ESP_LOGI(encoder->label,
-             "Angle: %u | Delta: %d | Position: %ld | angle_deg: %.2f | "
-             "angle_rad :%.2f",
-             current_angle, delta, encoder->accumulated_steps,
-             encoder->accumulated_steps * 360.0 / 4096 / encoder->gear_ratio,
-             encoder->accumulated_steps * 2 * M_PI / encoder->gear_ratio / 4096);
-
-    vTaskDelay(pdMS_TO_TICKS(25));
-  }
-}
-
-void encoder_try_calibration_task(void *arg) {
-  encoder_t *encoder = (encoder_t *)arg;
-  if (encoder == NULL) {
-    ESP_LOGE(TAG, "Parameter is null, aborting.");
+  if (last_angle == 0xFFFF) {
+    ESP_LOGE(encoder->label, "Failed initial encoder read");
     vTaskDelete(NULL);
     return;
   }
+
+  uint16_t current_angle;
+  int16_t delta;
+  uint32_t error_count = 0;
+
   while (1) {
-    if (encoder->switch_n->is_pressed) {
-      ESP_LOGI("encoder_try_calibration_task", "reseting encoder");
-      encoder->is_calibrated = true;
-      encoder->accumulated_steps = 0;
+    current_angle = encoder_read_angle(encoder);
+
+    if (current_angle == 0xFFFF) {
+      error_count++;
+      ESP_LOGW(encoder->label, "Failed to read angle (error count: %lu)",
+               error_count);
+
+      // If too many consecutive errors, consider resetting or taking action
+      if (error_count > 10) {
+        ESP_LOGE(encoder->label,
+                 "Too many consecutive read errors, continuing...");
+        error_count = 0; // Reset counter
+      }
+
+      vTaskDelay(pdMS_TO_TICKS(100)); // Longer delay on error
+      continue;
     }
-    vTaskDelay(pdMS_TO_TICKS(25));
+
+    error_count = 0; // Reset error counter on successful read
+
+    // Calculate delta with wraparound handling
+    delta = (int16_t)current_angle - (int16_t)last_angle;
+
+    // Handle wraparound (shortest path)
+    if (delta > half_encoder_val) {
+      delta -= max_encoder_val;
+    } else if (delta < -half_encoder_val) {
+      delta += max_encoder_val;
+    }
+
+    // Update accumulated steps
+    encoder->accumulated_steps += delta;
+
+    // Update angle calculations
+    encoder_update_absolute_angle(encoder);
+
+    // Optional: Log current position periodically
+    /* static uint32_t log_counter = 0; */
+    /* if (++log_counter % 100 == 0) { // Log every 5 seconds at 50ms intervals */
+    /*   ESP_LOGI(encoder->label, */
+    /*            "Raw: %d, Steps: %ld, Motor: %.2f°, Output: %.2f°", */
+    /*            current_angle, encoder->accumulated_steps, */
+    /*            encoder->motor_angle_degrees, encoder->angle_degrees); */
+    /* } */
+    /**/
+    last_angle = current_angle;
+    vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
+/* ESP_LOGI(encoder->label, "Raw angle: %u", current_angle); */
+/* ESP_LOGI(encoder->label, */
+/*          "Angle: %u | Delta: %d | Position: %ld | angle_deg: %.2f | " */
+/*          "angle_rad :%.2f", */
+/*          current_angle, delta, encoder->accumulated_steps, */
+/*          encoder->accumulated_steps * 360.0 / 4096 / encoder->gear_ratio,
+ */
+/*          encoder->accumulated_steps * 2 * M_PI / encoder->gear_ratio / */
+/*              4096); */
 
 #define MOTOR_CONTROL_TASK_PERIOD_MS 20
 
@@ -194,12 +217,13 @@ void motor_control_task(void *arg) {
   while (1) {
 
     if (!motor->control_vars->ref_encoder->is_calibrated) {
-      /* ESP_LOGI("motor_control_task", "encoder is not calibrated"); */
+    /* ESP_LOGI("motor_control_task", "encoder is not calibrated"); */
       vTaskDelay(pdMS_TO_TICKS(MOTOR_CONTROL_TASK_PERIOD_MS));
       continue;
     }
+
     error = motor->control_vars->encoder_target_pos -
-            motor->control_vars->ref_encoder->current_reading;
+            motor->control_vars->ref_encoder->accumulated_steps;
 
     const float DEAD_BAND_THRESHOLD = 2.0f;            // WARN: define this
     float dt = MOTOR_CONTROL_TASK_PERIOD_MS / 1000.0f; // Time in seconds
@@ -208,7 +232,7 @@ void motor_control_task(void *arg) {
     if (fabsf(error) < DEAD_BAND_THRESHOLD) {
       motor->control_vars->pid->integral = 0.0f;
       motor->pwm_vars->target_freq_hz = 0.0f;
-      motor_set_frequency(motor, 0.0f);
+      motor_set_target_frequency(motor, 0.0f);
       vTaskDelay(pdMS_TO_TICKS(MOTOR_CONTROL_TASK_PERIOD_MS));
       continue;
     }
@@ -230,7 +254,7 @@ void motor_control_task(void *arg) {
              motor->control_vars->pid->Ki * motor->control_vars->pid->integral +
              motor->control_vars->pid->Kd * derivative;
 
-    if (false) {
+    if (true) {
       ESP_LOGI("PID",
                "error: %.2f - output: %.2f | "
                "Kp*error = %.2f, Ki* integral = %.2f, Kd * derivative = %.2f",
@@ -257,11 +281,16 @@ void motor_control_task(void *arg) {
 
     // Determine direction
     bool reverse = output < 0;
+
+    // TODO: If direction is the same as previous, do not set level again...
+    /* ESP_LOGW("debug", "setting dir to %d", */
+    /*          motor->pwm_vars->dir_is_reversed ? !reverse : !reverse); */
+
     gpio_set_level(motor->gpio_dir,
                    motor->pwm_vars->dir_is_reversed ? !reverse : reverse);
 
     // Apply new frequency to motor
-    motor_set_frequency(motor, local_target_freq_hz);
+    motor_set_target_frequency(motor, local_target_freq_hz);
     vTaskDelay(pdMS_TO_TICKS(MOTOR_CONTROL_TASK_PERIOD_MS));
   }
 }
