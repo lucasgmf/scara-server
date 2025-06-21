@@ -6,15 +6,24 @@
 
 static const char *TAG = "HX711";
 
-// Global sensor data instance
-hx711_data_t g_hx711_data = {0}; /**
-                                  * Initialize HX711 driver
-                                  */
+// Global sensor data instances for both sensors
+hx711_data_t g_hx711_data[HX711_SENSOR_COUNT] = {0};
+
+/**
+ * Initialize HX711 driver
+ */
 esp_err_t hx711_init(hx711_config_t *config) {
   if (config == NULL) {
     ESP_LOGE(TAG, "Config is NULL");
     return ESP_ERR_INVALID_ARG;
   }
+
+  if (config->sensor_id >= HX711_SENSOR_COUNT) {
+    ESP_LOGE(TAG, "Invalid sensor ID: %d", config->sensor_id);
+    return ESP_ERR_INVALID_ARG;
+  }
+
+  ESP_LOGI(TAG, "Initializing HX711 sensor %d", config->sensor_id);
 
   // Configure data pin as input
   gpio_config_t data_config = {
@@ -26,7 +35,7 @@ esp_err_t hx711_init(hx711_config_t *config) {
   };
   esp_err_t ret = gpio_config(&data_config);
   if (ret != ESP_OK) {
-    ESP_LOGE(TAG, "Failed to configure data pin");
+    ESP_LOGE(TAG, "Failed to configure data pin for sensor %d", config->sensor_id);
     return ret;
   }
 
@@ -40,7 +49,7 @@ esp_err_t hx711_init(hx711_config_t *config) {
   };
   ret = gpio_config(&clock_config);
   if (ret != ESP_OK) {
-    ESP_LOGE(TAG, "Failed to configure clock pin");
+    ESP_LOGE(TAG, "Failed to configure clock pin for sensor %d", config->sensor_id);
     return ret;
   }
 
@@ -50,16 +59,16 @@ esp_err_t hx711_init(hx711_config_t *config) {
   // Power up the HX711 (ensure clock is low)
   vTaskDelay(pdMS_TO_TICKS(100));
 
-  // Initialize global data structure
-  memset(&g_hx711_data, 0, sizeof(hx711_data_t));
+  // Initialize global data structure for this sensor
+  memset(&g_hx711_data[config->sensor_id], 0, sizeof(hx711_data_t));
 
   // Check initial pin states for diagnostics
   int data_level = gpio_get_level(config->data_pin);
   int clock_level = gpio_get_level(config->clock_pin);
 
-  ESP_LOGI(TAG, "HX711 initialized - Data pin: %d, Clock pin: %d", data_level,
-           clock_level);
-  ESP_LOGI(TAG, "Waiting for HX711 to be ready...");
+  ESP_LOGI(TAG, "HX711 sensor %d initialized - Data pin: %d, Clock pin: %d", 
+           config->sensor_id, data_level, clock_level);
+  ESP_LOGI(TAG, "Waiting for HX711 sensor %d to be ready...", config->sensor_id);
 
   // Wait up to 5 seconds for HX711 to be ready
   int ready_timeout = 5000;
@@ -69,18 +78,18 @@ esp_err_t hx711_init(hx711_config_t *config) {
   }
 
   if (ready_timeout <= 0) {
-    ESP_LOGE(TAG, "HX711 not ready after 5 seconds. Check wiring and power!");
+    ESP_LOGE(TAG, "HX711 sensor %d not ready after 5 seconds. Check wiring and power!", config->sensor_id);
     ESP_LOGE(TAG, "Data pin should be LOW when ready. Current level: %d",
              gpio_get_level(config->data_pin));
     return ESP_ERR_TIMEOUT;
   }
 
-  ESP_LOGI(TAG, "HX711 is ready!");
+  ESP_LOGI(TAG, "HX711 sensor %d is ready!", config->sensor_id);
 
   // Do a test read to verify communication
-  ESP_LOGI(TAG, "Performing test read...");
+  ESP_LOGI(TAG, "Performing test read for sensor %d...", config->sensor_id);
   int32_t test_read = hx711_read_raw(config);
-  ESP_LOGI(TAG, "Test read result: %ld", test_read);
+  ESP_LOGI(TAG, "Test read result for sensor %d: %ld", config->sensor_id, test_read);
 
   return ESP_OK;
 }
@@ -104,8 +113,8 @@ int32_t hx711_read_raw(hx711_config_t *config) {
   }
 
   if (timeout == 0) {
-    ESP_LOGW(TAG, "HX711 not ready, timeout occurred. Data pin level: %d",
-             gpio_get_level(config->data_pin));
+    ESP_LOGW(TAG, "HX711 sensor %d not ready, timeout occurred. Data pin level: %d",
+             config->sensor_id, gpio_get_level(config->data_pin));
     return -1; // Return -1 to indicate error
   }
 
@@ -162,9 +171,9 @@ int32_t hx711_read_average(hx711_config_t *config, uint8_t samples) {
  * Tare the scale (set zero point)
  */
 void hx711_tare(hx711_config_t *config, uint8_t samples) {
-  ESP_LOGI(TAG, "Taring scale...");
+  ESP_LOGI(TAG, "Taring sensor %d...", config->sensor_id);
   config->offset = hx711_read_average(config, samples);
-  ESP_LOGI(TAG, "Tare complete. Offset: %ld", config->offset);
+  ESP_LOGI(TAG, "Tare complete for sensor %d. Offset: %ld", config->sensor_id, config->offset);
 }
 
 /**
@@ -172,7 +181,7 @@ void hx711_tare(hx711_config_t *config, uint8_t samples) {
  */
 void hx711_calibrate(hx711_config_t *config, float known_weight_grams,
                      uint8_t samples) {
-  ESP_LOGI(TAG, "Calibrating with %.2f grams...", known_weight_grams);
+  ESP_LOGI(TAG, "Calibrating sensor %d with %.2f grams...", config->sensor_id, known_weight_grams);
 
   // Read current value with the known weight
   int32_t reading = hx711_read_average(config, samples);
@@ -181,9 +190,9 @@ void hx711_calibrate(hx711_config_t *config, float known_weight_grams,
   int32_t raw_weight = reading - config->offset;
   if (raw_weight != 0) {
     config->scale = known_weight_grams / (float)raw_weight;
-    ESP_LOGI(TAG, "Calibration complete. Scale factor: %.6f", config->scale);
+    ESP_LOGI(TAG, "Calibration complete for sensor %d. Scale factor: %.6f", config->sensor_id, config->scale);
   } else {
-    ESP_LOGE(TAG, "Calibration failed: no weight detected");
+    ESP_LOGE(TAG, "Calibration failed for sensor %d: no weight detected", config->sensor_id);
   }
 }
 
@@ -217,7 +226,7 @@ void hx711_power_up(hx711_config_t *config) {
 void hx711_task(void *pvParameters) {
   hx711_config_t *config = (hx711_config_t *)pvParameters;
 
-  ESP_LOGI(TAG, "HX711 task started");
+  ESP_LOGI(TAG, "HX711 task started for sensor %d", config->sensor_id);
 
   while (1) {
     if (hx711_is_ready(config)) {
@@ -226,30 +235,32 @@ void hx711_task(void *pvParameters) {
 
       // Only update if we got a valid reading
       if (raw_reading != -1) {
-        g_hx711_data.raw_value = raw_reading;
+        g_hx711_data[config->sensor_id].raw_value = raw_reading;
 
         // Calculate weight in grams
-        g_hx711_data.weight_grams =
-            (float)(g_hx711_data.raw_value - config->offset) * config->scale;
+        g_hx711_data[config->sensor_id].weight_grams =
+            (float)(g_hx711_data[config->sensor_id].raw_value - config->offset) * config->scale;
 
         // Calculate weight in kg
-        g_hx711_data.weight_kg = g_hx711_data.weight_grams / 1000.0f;
+        g_hx711_data[config->sensor_id].weight_kg = g_hx711_data[config->sensor_id].weight_grams / 1000.0f;
 
         // Update timestamp
-        g_hx711_data.last_update_ms = esp_timer_get_time() / 1000;
+        g_hx711_data[config->sensor_id].last_update_ms = esp_timer_get_time() / 1000;
 
         // Mark data as ready
-        g_hx711_data.data_ready = true;
+        g_hx711_data[config->sensor_id].data_ready = true;
 
-        ESP_LOGD(TAG, "Raw: %ld, Weight: %.2f g, %.3f kg",
-                 g_hx711_data.raw_value, g_hx711_data.weight_grams,
-                 g_hx711_data.weight_kg);
+        ESP_LOGD(TAG, "Sensor %d - Raw: %ld, Weight: %.2f g, %.3f kg",
+                 config->sensor_id,
+                 g_hx711_data[config->sensor_id].raw_value, 
+                 g_hx711_data[config->sensor_id].weight_grams,
+                 g_hx711_data[config->sensor_id].weight_kg);
       } else {
-        ESP_LOGW(TAG, "Failed to read from HX711");
+        ESP_LOGW(TAG, "Failed to read from HX711 sensor %d", config->sensor_id);
       }
     } else {
-      ESP_LOGD(TAG, "HX711 not ready, data pin level: %d",
-               gpio_get_level(config->data_pin));
+      ESP_LOGD(TAG, "HX711 sensor %d not ready, data pin level: %d",
+               config->sensor_id, gpio_get_level(config->data_pin));
     }
 
     // Delay between readings (adjust as needed)

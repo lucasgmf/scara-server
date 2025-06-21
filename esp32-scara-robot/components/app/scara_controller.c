@@ -767,39 +767,64 @@ void loop_scara_readings() {
 
 #include "loadcell.h"
 
-hx711_config_t hx711_config = {
-    .data_pin = HX711_DATA_PIN,
-    .clock_pin = HX711_CLOCK_PIN,
+// Configuration for HX711 sensor 1
+hx711_config_t hx711_config_1 = {
+    .data_pin = HX711_1_DATA_PIN,
+    .clock_pin = HX711_1_CLOCK_PIN,
     .gain = HX711_GAIN_128,
     .offset = 0,
     .scale = 1.0f,
+    .sensor_id = HX711_SENSOR_1,
+};
+
+// Configuration for HX711 sensor 2
+hx711_config_t hx711_config_2 = {
+    .data_pin = HX711_2_DATA_PIN,
+    .clock_pin = HX711_2_CLOCK_PIN,
+    .gain = HX711_GAIN_128,
+    .offset = 0,
+    .scale = 1.0f,
+    .sensor_id = HX711_SENSOR_2,
 };
 
 void calibration_task(void *pvParameters) {
-  ESP_LOGI(TAG, "Starting calibration process...");
+  ESP_LOGI(TAG, "Starting calibration process for both sensors...");
 
   // Wait a bit for system to stabilize
   vTaskDelay(2000 / portTICK_PERIOD_MS);
 
-  // Step 1: Tare the scale
-  ESP_LOGI(TAG, "Please ensure no weight is on the scale");
-  ESP_LOGI(TAG, "Taring in 5 seconds...");
+  // Step 1: Tare both scales
+  ESP_LOGI(TAG, "Please ensure no weight is on either scale");
+  ESP_LOGI(TAG, "Taring both sensors in 5 seconds...");
   vTaskDelay(5000 / portTICK_PERIOD_MS);
 
-  hx711_tare(&hx711_config, 10); // Average of 10 readings
+  hx711_tare(&hx711_config_1, 10); // Average of 10 readings
+  hx711_tare(&hx711_config_2, 10); // Average of 10 readings
 
-  // Step 2: Calibrate with known weight
-  ESP_LOGI(TAG, "Please place a known weight on the scale");
-  ESP_LOGI(TAG, "Calibrating in 10 seconds...");
+  // Step 2: Calibrate sensor 1
+  ESP_LOGI(TAG, "Please place a known weight on SENSOR 1 ONLY");
+  ESP_LOGI(TAG, "Calibrating sensor 1 in 10 seconds...");
   vTaskDelay(10000 / portTICK_PERIOD_MS);
 
-  // Change this value to match your calibration weight
-  float calibration_weight = 100.0f; // 100 grams
-  hx711_calibrate(&hx711_config, calibration_weight, 10);
+  float calibration_weight_1 = 100.0f; // 100 grams
+  hx711_calibrate(&hx711_config_1, calibration_weight_1, 10);
 
-  ESP_LOGI(TAG, "Calibration complete!");
-  ESP_LOGI(TAG, "Offset: %ld, Scale: %.6f", hx711_config.offset,
-           hx711_config.scale);
+  ESP_LOGI(TAG, "Remove weight from sensor 1");
+  vTaskDelay(3000 / portTICK_PERIOD_MS);
+
+  // Step 3: Calibrate sensor 2
+  ESP_LOGI(TAG, "Please place a known weight on SENSOR 2 ONLY");
+  ESP_LOGI(TAG, "Calibrating sensor 2 in 10 seconds...");
+  vTaskDelay(10000 / portTICK_PERIOD_MS);
+
+  float calibration_weight_2 = 100.0f; // 100 grams
+  hx711_calibrate(&hx711_config_2, calibration_weight_2, 10);
+
+  ESP_LOGI(TAG, "Calibration complete for both sensors!");
+  ESP_LOGI(TAG, "Sensor 1 - Offset: %ld, Scale: %.6f", hx711_config_1.offset,
+           hx711_config_1.scale);
+  ESP_LOGI(TAG, "Sensor 2 - Offset: %ld, Scale: %.6f", hx711_config_2.offset,
+           hx711_config_2.scale);
 
   // Delete this task as calibration is done
   vTaskDelete(NULL);
@@ -809,41 +834,88 @@ void display_task(void *pvParameters) {
   ESP_LOGI(TAG, "Display task started");
 
   while (1) {
-    if (g_hx711_data.data_ready) {
-      ESP_LOGI(TAG, "Weight: %.2f g (%.3f kg) | Raw: %ld | Updated: %lu ms ago",
-               g_hx711_data.weight_grams, g_hx711_data.weight_kg,
-               g_hx711_data.raw_value,
-               (esp_timer_get_time() / 1000) - g_hx711_data.last_update_ms);
+    ESP_LOGI(TAG, "=== HX711 Dual Sensor Readings ===");
+
+    // Display sensor 1 data
+    if (g_hx711_data[HX711_SENSOR_1].data_ready) {
+      ESP_LOGI(TAG,
+               "Sensor 1: %.2f g (%.3f kg) | Raw: %ld | Updated: %lu ms ago",
+               g_hx711_data[HX711_SENSOR_1].weight_grams,
+               g_hx711_data[HX711_SENSOR_1].weight_kg,
+               g_hx711_data[HX711_SENSOR_1].raw_value,
+               (esp_timer_get_time() / 1000) -
+                   g_hx711_data[HX711_SENSOR_1].last_update_ms);
     } else {
-      ESP_LOGW(TAG, "No data available from HX711");
+      ESP_LOGW(TAG, "Sensor 1: No data available");
     }
 
+    // Display sensor 2 data
+    if (g_hx711_data[HX711_SENSOR_2].data_ready) {
+      ESP_LOGI(TAG,
+               "Sensor 2: %.2f g (%.3f kg) | Raw: %ld | Updated: %lu ms ago",
+               g_hx711_data[HX711_SENSOR_2].weight_grams,
+               g_hx711_data[HX711_SENSOR_2].weight_kg,
+               g_hx711_data[HX711_SENSOR_2].raw_value,
+               (esp_timer_get_time() / 1000) -
+                   g_hx711_data[HX711_SENSOR_2].last_update_ms);
+    } else {
+      ESP_LOGW(TAG, "Sensor 2: No data available");
+    }
+
+    // Calculate total weight if both sensors have data
+    if (g_hx711_data[HX711_SENSOR_1].data_ready &&
+        g_hx711_data[HX711_SENSOR_2].data_ready) {
+      float total_weight_g = g_hx711_data[HX711_SENSOR_1].weight_grams +
+                             g_hx711_data[HX711_SENSOR_2].weight_grams;
+      float total_weight_kg = total_weight_g / 1000.0f;
+      ESP_LOGI(TAG, "Total Weight: %.2f g (%.3f kg)", total_weight_g,
+               total_weight_kg);
+    }
+
+    ESP_LOGI(TAG, "================================");
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
 
 void force_sensor_initialization_func() {
-  ESP_LOGI(TAG, "Force Sensor Application Starting...");
+  ESP_LOGI(TAG, "Dual HX711 Force Sensor Application Starting...");
 
-  // Initialize HX711
-  esp_err_t ret = hx711_init(&hx711_config);
-  if (ret != ESP_OK) {
-    ESP_LOGE(TAG, "Failed to initialize HX711: %s", esp_err_to_name(ret));
-    ESP_LOGE(TAG, "Please check:");
+  // Initialize HX711 sensor 1
+  esp_err_t ret1 = hx711_init(&hx711_config_1);
+  if (ret1 != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to initialize HX711 sensor 1: %s",
+             esp_err_to_name(ret1));
+    ESP_LOGE(TAG, "Please check sensor 1 connections:");
     ESP_LOGE(TAG, "1. HX711 VDD connected to 3.3V or 5V");
     ESP_LOGE(TAG, "2. HX711 GND connected to ESP32 GND");
-    ESP_LOGE(TAG, "3. HX711 DT connected to GPIO 4");
-    ESP_LOGE(TAG, "4. HX711 SCK connected to GPIO 2");
+    ESP_LOGE(TAG, "3. HX711 DT connected to GPIO %d", HX711_1_DATA_PIN);
+    ESP_LOGE(TAG, "4. HX711 SCK connected to GPIO %d", HX711_1_CLOCK_PIN);
     ESP_LOGE(TAG, "5. Load cell properly connected to HX711");
-    ESP_LOGE(TAG, "6. Power supply adequate for both ESP32 and HX711");
     return;
   }
+
+  // Initialize HX711 sensor 2
+  esp_err_t ret2 = hx711_init(&hx711_config_2);
+  if (ret2 != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to initialize HX711 sensor 2: %s",
+             esp_err_to_name(ret2));
+    ESP_LOGE(TAG, "Please check sensor 2 connections:");
+    ESP_LOGE(TAG, "1. HX711 VDD connected to 3.3V or 5V");
+    ESP_LOGE(TAG, "2. HX711 GND connected to ESP32 GND");
+    ESP_LOGE(TAG, "3. HX711 DT connected to GPIO %d", HX711_2_DATA_PIN);
+    ESP_LOGE(TAG, "4. HX711 SCK connected to GPIO %d", HX711_2_CLOCK_PIN);
+    ESP_LOGE(TAG, "5. Load cell properly connected to HX711");
+    return;
+  }
+
+  ESP_LOGI(TAG, "Both HX711 sensors initialized successfully!");
 
   // Create calibration task (runs once)
   xTaskCreate(calibration_task, "calibration_task", 4096, NULL, 5, NULL);
 
-  // Create HX711 reading task
-  xTaskCreate(hx711_task, "hx711_task", 4096, &hx711_config, 6, NULL);
+  // Create HX711 reading tasks for both sensors
+  xTaskCreate(hx711_task, "hx711_task_1", 4096, &hx711_config_1, 6, NULL);
+  xTaskCreate(hx711_task, "hx711_task_2", 4096, &hx711_config_2, 6, NULL);
 
   // Create display task
   xTaskCreate(display_task, "display_task", 4096, NULL, 4, NULL);
@@ -851,25 +923,27 @@ void force_sensor_initialization_func() {
   ESP_LOGI(TAG, "All tasks created successfully");
 
   while (1) {
-    // Example: Access global data structure
-    if (g_hx711_data.data_ready) {
-      // You can use g_hx711_data.weight_grams, g_hx711_data.weight_kg, etc.
-      // from anywhere in your application
+    // Example: Access global data structures for both sensors
+    if (g_hx711_data[HX711_SENSOR_1].data_ready &&
+        g_hx711_data[HX711_SENSOR_2].data_ready) {
+      // You can use both sensors' data from anywhere in your application
+      // g_hx711_data[HX711_SENSOR_1].weight_grams,
+      // g_hx711_data[HX711_SENSOR_1].weight_kg
+      // g_hx711_data[HX711_SENSOR_2].weight_grams,
+      // g_hx711_data[HX711_SENSOR_2].weight_kg
     }
-
     vTaskDelay(5000 / portTICK_PERIOD_MS);
   }
 }
+
 void init_scara() {
   force_sensor_initialization_func();
   /* wifi_initialization_func(); */
   /* switch_initialization_task(); */
   /* encoder_initialization_task(); */
   /* motor_initialization_task(); */
-
   /* xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL); */
   /* xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL); */
   /* calibration_initialization_task(); */
-
-  ESP_LOGI(TAG, "");
+  ESP_LOGI(TAG, "init_scara completed");
 }
