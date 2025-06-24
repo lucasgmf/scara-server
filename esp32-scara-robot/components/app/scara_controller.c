@@ -126,6 +126,7 @@ static i2c_master_dev_handle_t tca_handle;
 static i2c_device_config_t encoder_0_cfg = {
     .dev_addr_length = I2C_ADDR_BIT_LEN_7,
     .device_address = I2C_ADDR_AS5600,
+    .scl_speed_hz = I2C_DEVICE_SPEED_HZ,
 };
 
 static i2c_device_config_t encoder_1_cfg = {
@@ -306,7 +307,6 @@ void encoder_initialization_task() {
 
   ESP_ERROR_CHECK(
       tca_select_channel(encoder_0.tca_channel, encoder_0.i2c_tca->dev_handle));
-
   ESP_ERROR_CHECK(i2c_master_bus_add_device(
       *i2c_master_conf.bus_handle, i2c_slave_conf_encoder_0.dev_cfg,
       i2c_slave_conf_encoder_0.dev_handle));
