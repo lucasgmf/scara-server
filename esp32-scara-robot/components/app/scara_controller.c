@@ -126,7 +126,6 @@ static i2c_master_dev_handle_t tca_handle;
 static i2c_device_config_t encoder_0_cfg = {
     .dev_addr_length = I2C_ADDR_BIT_LEN_7,
     .device_address = I2C_ADDR_AS5600,
-    .scl_speed_hz = I2C_DEVICE_SPEED_HZ,
 };
 
 static i2c_device_config_t encoder_1_cfg = {
@@ -749,18 +748,18 @@ void loop_scara_readings() {
 
     ESP_LOGI(encoder_0.label, "value: %f", encoder_0.angle_degrees);
     ESP_LOGI(encoder_1.label, "value: %f", encoder_1.angle_degrees);
-    /* ESP_LOGI(encoder_2.label, "value: %f", encoder_2.angle_degrees); */
-    /* ESP_LOGI(encoder_3.label, "value: %f", encoder_3.angle_degrees); */
+    ESP_LOGI(encoder_2.label, "value: %f", encoder_2.angle_degrees);
+    ESP_LOGI(encoder_3.label, "value: %f", encoder_3.angle_degrees);
 
     ESP_LOGI(encoder_0.label, "value: %d", encoder_0.accumulated_steps);
     ESP_LOGI(encoder_1.label, "value: %d", encoder_1.accumulated_steps);
-    /* ESP_LOGI(encoder_2.label, "value: %d", encoder_2.accumulated_steps); */
-    /* ESP_LOGI(encoder_3.label, "value: %d", encoder_3.accumulated_steps); */
+    ESP_LOGI(encoder_2.label, "value: %d", encoder_2.accumulated_steps);
+    ESP_LOGI(encoder_3.label, "value: %d", encoder_3.accumulated_steps);
 
     ESP_LOGI("", "");
     /* ESP_LOGI("loop_scara_readings", "motor freq: %f", */
     /* motor_b.pwm_vars->current_freq_hz); */
-    vTaskDelay(250 / portTICK_PERIOD_MS);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
   return;
 }
@@ -937,13 +936,13 @@ void force_sensor_initialization_func() {
 }
 
 void init_scara() {
-  force_sensor_initialization_func();
+  /* force_sensor_initialization_func(); */
   /* wifi_initialization_func(); */
-  /* switch_initialization_task(); */
-  /* encoder_initialization_task(); */
+  switch_initialization_task();
+  encoder_initialization_task();
   /* motor_initialization_task(); */
   /* xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL); */
-  /* xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL); */
+  xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL);
   /* calibration_initialization_task(); */
   ESP_LOGI(TAG, "init_scara completed");
 }
