@@ -446,7 +446,7 @@ motor_pwm_vars_t pwm_vars_z = {
 
 motor_pwm_vars_t pwm_vars_a = {
     .step_count = 0,
-    .max_freq = 100,
+    .max_freq = 1000,
     .min_freq = 0,
     .max_accel = 1000,
     .current_freq_hz = 0,
@@ -625,8 +625,9 @@ void motor_initialization_task() {
 
   ESP_LOGI(TAG, "All motors initialized successfully");
   /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_x, 5, NULL); */
-  xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_y, 5, NULL);
-  xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_z, 5, NULL);
+  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_y, 5, NULL); */
+  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_z, 5, NULL); */
+  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_z, 5, NULL); */
   return;
 }
 
@@ -699,44 +700,64 @@ void loop_scara_task() {
   while (1) {
     ESP_LOGI("loop_scara_task", "dir 1");
     /* gpio_set_level(motor_x.gpio_dir, 1); */
+    /* gpio_set_level(motor_x.gpio_stp, 1); */
+    /**/
     /* gpio_set_level(motor_y.gpio_dir, 1); */
-    gpio_set_level(motor_z.gpio_dir, 1);
+    /* gpio_set_level(motor_y.gpio_stp, 1); */
+    /**/
+    /* gpio_set_level(motor_z.gpio_dir, 1); */
+    /* gpio_set_level(motor_z.gpio_stp, 1); */
+    /**/
+    /* gpio_set_level(motor_a.gpio_dir, 1); */
+    /* gpio_set_level(motor_a.gpio_stp, 1); */
+    /**/
+    /* gpio_set_level(motor_b.gpio_stp, 1); */
+    /* gpio_set_level(motor_b.gpio_dir, 1); */
+    /**/
+    /* gpio_set_level(motor_z.gpio_dir, 1); */
     /* gpio_set_level(motor_a.gpio_dir, 1); */
     /* gpio_set_level(motor_b.gpio_dir, 1); */
 
+
+    /* gpio_set_level(motor_x.gpio_dir, 1); */
+    /* gpio_set_level(motor_y.gpio_dir, 1); */
+    /* gpio_set_level(motor_z.gpio_dir, 1); */
+    /* gpio_set_level(motor_a.gpio_dir, 1); */
+    gpio_set_level(motor_b.gpio_dir, 1);
+
     /* motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq); */
     /* motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq); */
-    motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq);
+    /* motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq); */
     /* motor_set_target_frequency(&motor_a, motor_a.pwm_vars->max_freq); */
-    /* motor_set_target_frequency(&motor_b, motor_b.pwm_vars->max_freq); */
+    motor_set_target_frequency(&motor_b, motor_b.pwm_vars->max_freq);
     vTaskDelay(3000 / portTICK_PERIOD_MS);
 
     /* motor_set_target_frequency(&motor_x, 0); */
     /* motor_set_target_frequency(&motor_y, 0); */
-    motor_set_target_frequency(&motor_z, 0);
+    /* motor_set_target_frequency(&motor_z, 0); */
     /* motor_set_target_frequency(&motor_a, 0); */
-    /* motor_set_target_frequency(&motor_b, 0); */
+    motor_set_target_frequency(&motor_b, 0);
     vTaskDelay(3000 / portTICK_PERIOD_MS);
 
     /* ESP_LOGI("loop_scara_task", "dir 0"); */
     /* gpio_set_level(motor_x.gpio_dir, 0); */
     /* gpio_set_level(motor_y.gpio_dir, 0); */
-    gpio_set_level(motor_z.gpio_dir, 0);
+    /* gpio_set_level(motor_z.gpio_dir, 0); */
     /* gpio_set_level(motor_a.gpio_dir, 0); */
-    /* gpio_set_level(motor_b.gpio_dir, 0); */
+    gpio_set_level(motor_b.gpio_dir, 0);
 
     /* motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq); */
     /* motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq); */
-    motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq);
+    /* motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq); */
     /* motor_set_target_frequency(&motor_a, motor_a.pwm_vars->max_freq); */
-    /* motor_set_target_frequency(&motor_b, motor_b.pwm_vars->max_freq); */
+    motor_set_target_frequency(&motor_b, motor_b.pwm_vars->max_freq);
     vTaskDelay(3000 / portTICK_PERIOD_MS);
 
     /* motor_set_target_frequency(&motor_x, 0); */
     /* motor_set_target_frequency(&motor_y, 0); */
-    motor_set_target_frequency(&motor_z, 0);
+    /* motor_set_target_frequency(&motor_z, 0); */
     /* motor_set_target_frequency(&motor_a, 0); */
-    /* motor_set_target_frequency(&motor_b, 0); */
+    motor_set_target_frequency(&motor_b, 0);
     vTaskDelay(3000 / portTICK_PERIOD_MS);
   }
 }
@@ -940,7 +961,7 @@ void init_scara() {
   /* wifi_initialization_func(); */
   switch_initialization_task();
   encoder_initialization_task();
-  /* motor_initialization_task(); */
+  motor_initialization_task();
   /* xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL); */
   xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL);
   /* calibration_initialization_task(); */
