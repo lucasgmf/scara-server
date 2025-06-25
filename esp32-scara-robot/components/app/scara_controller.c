@@ -595,6 +595,8 @@ void motor_initialization_task() {
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "Failed to initialize timer for motor X");
   }
+  motor_x.pwm_vars->target_steps = 0;
+  motor_x.pwm_vars->step_counting_enabled = true;
 
   motor_init_dir(&motor_y);
   motor_create_pwm(&motor_y);
@@ -624,10 +626,14 @@ void motor_initialization_task() {
   }
 
   ESP_LOGI(TAG, "All motors initialized successfully");
-  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_x, 5, NULL); */
-  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_y, 5, NULL); */
-  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_z, 5, NULL); */
-  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_z, 5, NULL); */
+  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_x, 5, NULL);
+   */
+  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_y, 5, NULL);
+   */
+  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_z, 5, NULL);
+   */
+  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_z, 5, NULL);
+   */
   return;
 }
 
@@ -718,7 +724,6 @@ void loop_scara_task() {
     /* gpio_set_level(motor_a.gpio_dir, 1); */
     /* gpio_set_level(motor_b.gpio_dir, 1); */
 
-
     /* gpio_set_level(motor_x.gpio_dir, 1); */
     /* gpio_set_level(motor_y.gpio_dir, 1); */
     /* gpio_set_level(motor_z.gpio_dir, 1); */
@@ -730,6 +735,7 @@ void loop_scara_task() {
     /* motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq); */
     /* motor_set_target_frequency(&motor_a, motor_a.pwm_vars->max_freq); */
     motor_set_target_frequency(&motor_b, motor_b.pwm_vars->max_freq);
+    motor_move_steps(&motor_x, -4000, motor_x.pwm_vars->max_freq);
     vTaskDelay(3000 / portTICK_PERIOD_MS);
 
     /* motor_set_target_frequency(&motor_x, 0); */
@@ -737,6 +743,7 @@ void loop_scara_task() {
     /* motor_set_target_frequency(&motor_z, 0); */
     /* motor_set_target_frequency(&motor_a, 0); */
     motor_set_target_frequency(&motor_b, 0);
+    motor_move_steps(&motor_x, 4000, motor_x.pwm_vars->max_freq);
     vTaskDelay(3000 / portTICK_PERIOD_MS);
 
     /* ESP_LOGI("loop_scara_task", "dir 0"); */
@@ -744,12 +751,14 @@ void loop_scara_task() {
     /* gpio_set_level(motor_y.gpio_dir, 0); */
     /* gpio_set_level(motor_z.gpio_dir, 0); */
     /* gpio_set_level(motor_a.gpio_dir, 0); */
+    motor_move_steps(&motor_x, -1000, motor_x.pwm_vars->max_freq);
     gpio_set_level(motor_b.gpio_dir, 0);
 
     /* motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq); */
     /* motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq); */
     /* motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq); */
     /* motor_set_target_frequency(&motor_a, motor_a.pwm_vars->max_freq); */
+    motor_move_steps(&motor_x, 1000, motor_x.pwm_vars->max_freq);
     motor_set_target_frequency(&motor_b, motor_b.pwm_vars->max_freq);
     vTaskDelay(3000 / portTICK_PERIOD_MS);
 
@@ -962,7 +971,7 @@ void init_scara() {
   switch_initialization_task();
   encoder_initialization_task();
   motor_initialization_task();
-  /* xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL); */
+  xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL);
   xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL);
   /* calibration_initialization_task(); */
   ESP_LOGI(TAG, "init_scara completed");

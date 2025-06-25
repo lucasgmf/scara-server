@@ -385,7 +385,7 @@ esp_err_t motor_restart_pwm(motor_t *motor) {
   return ESP_OK;
 }
 
-// Updated timer callback to fix frequency stuttering
+// Updated timer callback with fixed step counting
 void motor_update_timer_cb(void *arg) {
   motor_t *motor = (motor_t *)arg;
 
@@ -394,6 +394,73 @@ void motor_update_timer_cb(void *arg) {
   float target_freq = motor->pwm_vars->target_freq_hz;
   float *velocity = &motor->pwm_vars->velocity_hz_per_s;
   float max_accel = motor->pwm_vars->max_accel;
+
+  // STEP COUNTING - Check if we've reached target steps BEFORE updating
+  // frequency
+  if (motor->pwm_vars->step_counting_enabled && current_freq > 0) {
+    // Calculate steps taken this interval based on CURRENT frequency
+    float steps_this_interval_f = current_freq * dt;
+    uint32_t steps_this_interval = (uint32_t)steps_this_interval_f;
+
+    // Add fractional part tracking for better accuracy
+    static float fractional_steps = 0.0f;
+    fractional_steps += steps_this_interval_f - steps_this_interval;
+    if (fractional_steps >= 1.0f) {
+      steps_this_interval += (uint32_t)fractional_steps;
+      fractional_steps -= (uint32_t)fractional_steps;
+    }
+
+    motor->pwm_vars->step_count += steps_this_interval;
+
+    // Check if we've reached or will exceed target steps
+    if (motor->pwm_vars->target_steps > 0 &&
+        motor->pwm_vars->step_count >= motor->pwm_vars->target_steps) {
+
+      ESP_LOGI(TAG, "Motor %d reached target steps: %d (actual: %d)", motor->id,
+               motor->pwm_vars->target_steps, motor->pwm_vars->step_count);
+
+      // IMMEDIATELY stop the motor
+      motor->pwm_vars->target_freq_hz = 0;
+      motor->pwm_vars->current_freq_hz = 0;
+      *velocity = 0;
+
+      // Stop PWM immediately
+      motor_stop_pwm(motor);
+      motor_delete_pwm(motor);
+
+      // Stop the timer
+      esp_timer_stop(motor->mcpwm_vars->esp_timer_handle);
+
+      // Disable step counting to prevent further triggers
+      motor->pwm_vars->step_counting_enabled = false;
+
+      ESP_LOGI(TAG, "Motor %d stopped after %d steps", motor->id,
+               motor->pwm_vars->step_count);
+      return;
+    }
+
+    // If we're getting close to target, start decelerating
+    if (motor->pwm_vars->target_steps > 0) {
+      uint32_t remaining_steps =
+          motor->pwm_vars->target_steps - motor->pwm_vars->step_count;
+
+      // Calculate deceleration distance (steps needed to stop from current
+      // frequency)
+      float decel_time = current_freq / max_accel; // Time to decelerate to 0
+      uint32_t decel_steps =
+          (uint32_t)(current_freq * decel_time / 2); // Area under triangle
+
+      // If we're within deceleration distance, reduce target frequency
+      if (remaining_steps <= decel_steps && remaining_steps > 0) {
+        // Calculate what frequency we should have to stop in remaining steps
+        float ideal_freq = sqrt(2.0f * max_accel * remaining_steps);
+        if (ideal_freq < target_freq) {
+          target_freq = ideal_freq;
+          motor->pwm_vars->target_freq_hz = target_freq;
+        }
+      }
+    }
+  }
 
   // Calculate frequency error
   float freq_error = target_freq - current_freq;
@@ -413,11 +480,18 @@ void motor_update_timer_cb(void *arg) {
       // Target is 0 - delete PWM completely (this will also stop it)
       motor_delete_pwm(motor);
       ESP_LOGI(TAG, "PWM stopped and deleted for 0 Hz target");
+
+      // Stop the timer - target reached
+      esp_timer_stop(motor->mcpwm_vars->esp_timer_handle);
+      return;
     }
 
-    // Stop the timer - target reached
-    esp_timer_stop(motor->mcpwm_vars->esp_timer_handle);
-    return;
+    // If not doing step counting, stop the timer when target is reached
+    if (!motor->pwm_vars->step_counting_enabled ||
+        motor->pwm_vars->target_steps <= 0) {
+      esp_timer_stop(motor->mcpwm_vars->esp_timer_handle);
+      return;
+    }
   }
 
   // Calculate desired acceleration based on error
@@ -458,7 +532,7 @@ void motor_update_timer_cb(void *arg) {
   // Update the motor's current frequency
   motor->pwm_vars->current_freq_hz = new_freq;
 
-  // IMPROVED: Handle frequency transitions more smoothly
+  // Handle frequency transitions more smoothly
   if (new_freq > 0.0f) {
     // Check if PWM needs to be created (transitioning from 0)
     if (motor->mcpwm_vars->timer == NULL) {
@@ -653,4 +727,61 @@ esp_err_t motor_create_pwm_with_frequency(motor_t *motor, float freq_hz) {
    */
   /*          motor->id, freq, period_ticks); */
   return ESP_OK;
+}
+
+void motor_reset_step_count(motor_t *motor) {
+  if (motor == NULL)
+    return;
+  motor->pwm_vars->step_count = 0;
+  ESP_LOGI(TAG, "Step count reset for motor %d", motor->id);
+}
+
+void motor_enable_step_counting(motor_t *motor, bool enable) {
+  if (motor == NULL)
+    return;
+  motor->pwm_vars->step_counting_enabled = enable;
+  ESP_LOGI(TAG, "Step counting %s for motor %d",
+           enable ? "enabled" : "disabled", motor->id);
+}
+
+esp_err_t motor_set_target_steps(motor_t *motor, int target_steps) {
+  if (motor == NULL)
+    return ESP_ERR_INVALID_ARG;
+  motor->pwm_vars->target_steps = target_steps;
+  ESP_LOGI(TAG, "Target steps set to %d for motor %d", target_steps, motor->id);
+  return ESP_OK;
+}
+
+int motor_get_step_count(motor_t *motor) {
+  if (motor == NULL)
+    return -1;
+  return motor->pwm_vars->step_count;
+}
+
+esp_err_t motor_move_steps(motor_t *motor, int steps, float frequency) {
+  if (motor == NULL)
+    return ESP_ERR_INVALID_ARG;
+
+  // Stop any current movement first
+  motor_set_target_frequency(motor, 0);
+  vTaskDelay(pdMS_TO_TICKS(10)); // Small delay to ensure stop
+
+  // Enable step counting
+  motor->pwm_vars->step_counting_enabled = true;
+
+  // Reset counter and set target
+  motor->pwm_vars->step_count = 0;
+  motor->pwm_vars->target_steps = abs(steps);
+
+  // Set direction based on positive/negative steps
+  bool forward = (steps >= 0);
+  if (motor->is_inverted)
+    forward = !forward;
+  gpio_set_level(motor->gpio_dir, forward ? 1 : 0);
+
+  ESP_LOGI(TAG, "Moving motor %d: %d steps at %.2f Hz", motor->id, steps,
+           frequency);
+
+  // Start movement
+  return motor_set_target_frequency(motor, frequency);
 }
