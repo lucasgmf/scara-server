@@ -416,7 +416,7 @@ motor_mcpwm_vars mcpwm_vars_b = {
 };
 motor_pwm_vars_t pwm_vars_x = {
     .step_count = 0,
-    .max_freq = 800,
+    .max_freq = 1200,
     .min_freq = 0,
     .max_accel = 3000,
     .current_freq_hz = 0,
@@ -626,32 +626,30 @@ void motor_initialization_task() {
   }
 
   ESP_LOGI(TAG, "All motors initialized successfully");
-  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_x, 5, NULL);
-   */
-  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_y, 5, NULL);
-   */
-  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_z, 5, NULL);
-   */
+  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_x, 5, NULL); */
+
+  xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_y, 5, NULL);
+  xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_z, 5, NULL);
+
   /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_z, 5, NULL);
    */
   return;
 }
 
 void calibration_initialization_task() {
-  gpio_set_level(motor_x.gpio_dir, false);
+  gpio_set_level(motor_x.gpio_dir, true);
   gpio_set_level(motor_y.gpio_dir, false);
   gpio_set_level(motor_z.gpio_dir, true);
   gpio_set_level(motor_a.gpio_dir, false);
   gpio_set_level(motor_b.gpio_dir, false);
 
-  /* motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq / 2); */
-  /* while (!motor_x.control_vars->ref_switch->is_pressed) { */
-  /*   ESP_LOGI("calibration_initialization_task", "calibrating motor_x"); */
-  /*   vTaskDelay(20); */
-  /* } */
-
-  /* motor_set_target_frequency(&motor_x, 0); */
-  // set new value ...
+  motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq);
+  while (!motor_x.control_vars->ref_switch->is_pressed) {
+    ESP_LOGI("calibration_initialization_task", "calibrating motor_x");
+    vTaskDelay(20);
+  }
+  motor_set_target_frequency(&motor_x, 0);
+  motor_move_steps(&motor_x, 6400 * 10 / 6 * 5, motor_x.pwm_vars->max_freq);
 
   motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq / 4);
   while (!motor_y.control_vars->ref_switch->is_pressed) {
@@ -669,10 +667,12 @@ void calibration_initialization_task() {
     ESP_LOGI("calibration_initialization_task", "calibrating motor_z");
     vTaskDelay(20);
   }
+
   ESP_LOGI("calibration_initialization_task", "finished motor_z cal");
   motor_set_target_frequency(&motor_z, 0);
   encoder_zero_position(motor_z.control_vars->ref_encoder);
   motor_z.control_vars->encoder_target_pos = 0;
+  motor_y.control_vars->encoder_target_pos = 0;
 
   /* motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq); */
   /* while (!motor_y.control_vars->ref_switch->is_pressed) { */
@@ -971,8 +971,8 @@ void init_scara() {
   switch_initialization_task();
   encoder_initialization_task();
   motor_initialization_task();
-  xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL);
+  /* xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL); */
   xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL);
-  /* calibration_initialization_task(); */
+  calibration_initialization_task();
   ESP_LOGI(TAG, "init_scara completed");
 }
