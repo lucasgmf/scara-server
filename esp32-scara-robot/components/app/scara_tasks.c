@@ -307,6 +307,6 @@ void switch_task(void *arg) {
     update_switch_val(switch_n);
     /* ESP_LOGI("switch_task", "value of switch_n is %d", switch_n->is_pressed);
      */
-    vTaskDelay(pdMS_TO_TICKS(25));
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
