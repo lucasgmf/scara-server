@@ -255,7 +255,7 @@ void motor_control_task(void *arg) {
              motor->control_vars->pid->Ki * motor->control_vars->pid->integral +
              motor->control_vars->pid->Kd * derivative;
 
-    if (true) {
+    if (false) {
       ESP_LOGI("PID",
                "error: %.2f - output: %.2f | "
                "Kp*error = %.2f, Ki* integral = %.2f, Kd * derivative = %.2f",
