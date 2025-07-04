@@ -416,7 +416,7 @@ motor_mcpwm_vars mcpwm_vars_b = {
 };
 motor_pwm_vars_t pwm_vars_x = {
     .step_count = 0,
-    .max_freq = 800,
+    .max_freq = 1200,
     .min_freq = 0,
     .max_accel = 3000,
     .current_freq_hz = 0,
@@ -431,7 +431,7 @@ motor_pwm_vars_t pwm_vars_y = {
     .max_accel = 3000,
     .current_freq_hz = 0,
     .target_freq_hz = 0,
-    .dir_is_reversed = false,
+    .dir_is_reversed = true,
 };
 
 motor_pwm_vars_t pwm_vars_z = {
@@ -441,7 +441,7 @@ motor_pwm_vars_t pwm_vars_z = {
     .max_accel = 3000,
     .current_freq_hz = 0,
     .target_freq_hz = 0,
-    .dir_is_reversed = false,
+    .dir_is_reversed = true,
 };
 
 motor_pwm_vars_t pwm_vars_a = {
@@ -458,7 +458,7 @@ motor_pwm_vars_t pwm_vars_b = {
     .step_count = 0,
     .max_freq = 1000,
     .min_freq = 0,
-    .max_accel = 3000,
+    .max_accel = 5000,
     .current_freq_hz = 0,
     .target_freq_hz = 0,
     .dir_is_reversed = false,
@@ -551,7 +551,7 @@ motor_t motor_y = {
     .mcpwm_vars = &mcpwm_vars_y,
     .pwm_vars = &pwm_vars_y,
     .control_vars = &control_vars_y,
-    .is_inverted = false,
+    .is_inverted = true,
 };
 
 motor_t motor_z = {
@@ -595,6 +595,8 @@ void motor_initialization_task() {
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "Failed to initialize timer for motor X");
   }
+  motor_x.pwm_vars->target_steps = 0;
+  motor_x.pwm_vars->step_counting_enabled = true;
 
   motor_init_dir(&motor_y);
   motor_create_pwm(&motor_y);
@@ -625,29 +627,29 @@ void motor_initialization_task() {
 
   ESP_LOGI(TAG, "All motors initialized successfully");
   /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_x, 5, NULL); */
-  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_y, 5, NULL); */
-  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_z, 5, NULL); */
-  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_z, 5, NULL); */
+
+  xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_y, 5, NULL);
+  xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_z, 5, NULL);
   return;
 }
 
 void calibration_initialization_task() {
-  gpio_set_level(motor_x.gpio_dir, false);
-  gpio_set_level(motor_y.gpio_dir, false);
-  gpio_set_level(motor_z.gpio_dir, true);
+  gpio_set_level(motor_x.gpio_dir, true);
+  gpio_set_level(motor_y.gpio_dir, true);
+  gpio_set_level(motor_z.gpio_dir, false);
   gpio_set_level(motor_a.gpio_dir, false);
   gpio_set_level(motor_b.gpio_dir, false);
 
-  /* motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq / 2); */
-  /* while (!motor_x.control_vars->ref_switch->is_pressed) { */
-  /*   ESP_LOGI("calibration_initialization_task", "calibrating motor_x"); */
-  /*   vTaskDelay(20); */
-  /* } */
-
-  /* motor_set_target_frequency(&motor_x, 0); */
-  // set new value ...
+  motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq);
+  while (!motor_x.control_vars->ref_switch->is_pressed) {
+    ESP_LOGI("calibration_initialization_task", "calibrating motor_x");
+    vTaskDelay(20);
+  }
+  motor_set_target_frequency(&motor_x, 0);
+  motor_move_steps(&motor_x, 6400 * 10 / 6 * 5, motor_x.pwm_vars->max_freq);
 
   motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq / 4);
+  /* motor_y.pwm_vars->target_freq_hz = motor_y.pwm_vars->max_freq / 4; */
   while (!motor_y.control_vars->ref_switch->is_pressed) {
     ESP_LOGI("calibration_initialization_task", "calibrating motor_y");
     vTaskDelay(20);
@@ -663,10 +665,12 @@ void calibration_initialization_task() {
     ESP_LOGI("calibration_initialization_task", "calibrating motor_z");
     vTaskDelay(20);
   }
+
   ESP_LOGI("calibration_initialization_task", "finished motor_z cal");
   motor_set_target_frequency(&motor_z, 0);
   encoder_zero_position(motor_z.control_vars->ref_encoder);
   motor_z.control_vars->encoder_target_pos = 0;
+  motor_y.control_vars->encoder_target_pos = 0;
 
   /* motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq); */
   /* while (!motor_y.control_vars->ref_switch->is_pressed) { */
@@ -677,10 +681,6 @@ void calibration_initialization_task() {
   /* encoder_zero_position(motor_z.control_vars->ref_encoder); */
   /* motor_z.control_vars->encoder_target_pos = 0; */
 
-  while (1) {
-    vTaskDelay(5000);
-  }
-
   /* // go to middle */
   /* motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq / 4); */
   /* while (!motor_z.control_vars->ref_switch->is_pressed) { */
@@ -688,7 +688,21 @@ void calibration_initialization_task() {
   /*   vTaskDelay(20); */
   /* } */
   // set new value
+  ESP_LOGW("calibration", "\n\n\nAll calibrations done!\n\n\n");
 
+  // testing ratios
+
+  motor_y.control_vars->encoder_target_pos =
+      -90 * motor_y.control_vars->ref_encoder->encoder_resolution / 360 *
+      motor_y.control_vars->ref_encoder->gear_ratio;
+
+  motor_z.control_vars->encoder_target_pos =
+      90 * motor_z.control_vars->ref_encoder->encoder_resolution / 360 *
+          motor_z.control_vars->ref_encoder->gear_ratio +
+      motor_y.control_vars->encoder_target_pos;
+
+  ESP_LOGI("test", "changing target pos to %f",
+           motor_z.control_vars->encoder_target_pos);
   return;
 }
 
@@ -707,59 +721,103 @@ void loop_scara_task() {
     /**/
     /* gpio_set_level(motor_z.gpio_dir, 1); */
     /* gpio_set_level(motor_z.gpio_stp, 1); */
-    /**/
+
     /* gpio_set_level(motor_a.gpio_dir, 1); */
     /* gpio_set_level(motor_a.gpio_stp, 1); */
-    /**/
+
     /* gpio_set_level(motor_b.gpio_stp, 1); */
     /* gpio_set_level(motor_b.gpio_dir, 1); */
-    /**/
+
     /* gpio_set_level(motor_z.gpio_dir, 1); */
     /* gpio_set_level(motor_a.gpio_dir, 1); */
     /* gpio_set_level(motor_b.gpio_dir, 1); */
 
-
-    /* gpio_set_level(motor_x.gpio_dir, 1); */
-    /* gpio_set_level(motor_y.gpio_dir, 1); */
-    /* gpio_set_level(motor_z.gpio_dir, 1); */
-    /* gpio_set_level(motor_a.gpio_dir, 1); */
+    gpio_set_level(motor_x.gpio_dir, 1);
+    gpio_set_level(motor_y.gpio_dir, 1);
+    gpio_set_level(motor_z.gpio_dir, 1);
+    gpio_set_level(motor_a.gpio_dir, 1);
     gpio_set_level(motor_b.gpio_dir, 1);
 
-    /* motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq); */
-    /* motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq); */
-    /* motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq); */
-    /* motor_set_target_frequency(&motor_a, motor_a.pwm_vars->max_freq); */
+    motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq);
+    motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq);
+    motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq);
+    motor_set_target_frequency(&motor_a, motor_a.pwm_vars->max_freq);
     motor_set_target_frequency(&motor_b, motor_b.pwm_vars->max_freq);
+    /* motor_move_steps(&motor_x, -4000, motor_x.pwm_vars->max_freq); */
     vTaskDelay(3000 / portTICK_PERIOD_MS);
 
-    /* motor_set_target_frequency(&motor_x, 0); */
-    /* motor_set_target_frequency(&motor_y, 0); */
-    /* motor_set_target_frequency(&motor_z, 0); */
-    /* motor_set_target_frequency(&motor_a, 0); */
+    motor_set_target_frequency(&motor_x, 0);
+    motor_set_target_frequency(&motor_y, 0);
+    motor_set_target_frequency(&motor_z, 0);
+    motor_set_target_frequency(&motor_a, 0);
     motor_set_target_frequency(&motor_b, 0);
+    /* motor_move_steps(&motor_x, 4000, motor_x.pwm_vars->max_freq); */
     vTaskDelay(3000 / portTICK_PERIOD_MS);
 
-    /* ESP_LOGI("loop_scara_task", "dir 0"); */
-    /* gpio_set_level(motor_x.gpio_dir, 0); */
-    /* gpio_set_level(motor_y.gpio_dir, 0); */
-    /* gpio_set_level(motor_z.gpio_dir, 0); */
-    /* gpio_set_level(motor_a.gpio_dir, 0); */
+    ESP_LOGI("loop_scara_task", "dir 0");
+    gpio_set_level(motor_x.gpio_dir, 0);
+    gpio_set_level(motor_y.gpio_dir, 0);
+    gpio_set_level(motor_z.gpio_dir, 0);
+    gpio_set_level(motor_a.gpio_dir, 0);
     gpio_set_level(motor_b.gpio_dir, 0);
+    /* motor_move_steps(&motor_x, -1000, motor_x.pwm_vars->max_freq); */
 
-    /* motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq); */
-    /* motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq); */
-    /* motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq); */
-    /* motor_set_target_frequency(&motor_a, motor_a.pwm_vars->max_freq); */
+    motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq);
+    motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq);
+    motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq);
+    motor_set_target_frequency(&motor_a, motor_a.pwm_vars->max_freq);
     motor_set_target_frequency(&motor_b, motor_b.pwm_vars->max_freq);
+    /* motor_move_steps(&motor_x, 1000, motor_x.pwm_vars->max_freq); */
     vTaskDelay(3000 / portTICK_PERIOD_MS);
 
-    /* motor_set_target_frequency(&motor_x, 0); */
-    /* motor_set_target_frequency(&motor_y, 0); */
-    /* motor_set_target_frequency(&motor_z, 0); */
-    /* motor_set_target_frequency(&motor_a, 0); */
+    motor_set_target_frequency(&motor_x, 0);
+    motor_set_target_frequency(&motor_y, 0);
+    motor_set_target_frequency(&motor_z, 0);
+    motor_set_target_frequency(&motor_a, 0);
     motor_set_target_frequency(&motor_b, 0);
     vTaskDelay(3000 / portTICK_PERIOD_MS);
   }
+}
+
+#include "loadcell.h"
+
+// GPIO pin definitions for HX711 #0
+#define HX711_0_DATA_PIN GPIO_NUM_4
+#define HX711_0_CLOCK_PIN GPIO_NUM_2
+
+// GPIO pin definitions for HX711 #1
+#define HX711_1_DATA_PIN GPIO_NUM_13
+#define HX711_1_CLOCK_PIN GPIO_NUM_12
+
+hx711_t hx711_0 = {
+    .label = "sensor_0",
+    .data_pin = HX711_0_DATA_PIN,
+    .clock_pin = HX711_0_CLOCK_PIN,
+    .gain = HX711_GAIN_64,
+    .tare_offset = 0,
+    .scale = 1.0f,
+    .raw_read = 0,
+};
+
+hx711_t hx711_1 = {
+    .label = "sensor_1",
+    .data_pin = HX711_1_DATA_PIN,
+    .clock_pin = HX711_1_CLOCK_PIN,
+    .gain = HX711_GAIN_128,
+    .tare_offset = 0,
+    .scale = 1.0f,
+    .raw_read = 0,
+};
+
+void hx711_initialization_func() {
+  hx711_gpio_init(&hx711_0);
+  hx711_gpio_init(&hx711_1);
+
+  xTaskCreate(hx711_task, "hx711_0_task", 4096, &hx711_0, 5, NULL);
+  xTaskCreate(hx711_task, "hx712_1_task", 4096, &hx711_1, 5, NULL);
+  /* xTaskCreate(hx711_avg_task, "hx712_1_avg_task", 4096, &hx711_1, 5, NULL);
+   */
+  return;
 }
 
 void loop_scara_readings() {
@@ -767,203 +825,31 @@ void loop_scara_readings() {
     ESP_LOGI("switch_0", "is pressed: %d", switch_0.is_pressed);
     ESP_LOGI("switch_1", "is pressed: %d", switch_1.is_pressed);
 
-    ESP_LOGI(encoder_0.label, "value: %f", encoder_0.angle_degrees);
-    ESP_LOGI(encoder_1.label, "value: %f", encoder_1.angle_degrees);
-    ESP_LOGI(encoder_2.label, "value: %f", encoder_2.angle_degrees);
-    ESP_LOGI(encoder_3.label, "value: %f", encoder_3.angle_degrees);
+    ESP_LOGI(encoder_0.label, "value deg: %f", encoder_0.angle_degrees);
+    ESP_LOGI(encoder_1.label, "value deg: %f", encoder_1.angle_degrees);
+    ESP_LOGI(encoder_2.label, "value deg: %f", encoder_2.angle_degrees);
+    ESP_LOGI(encoder_3.label, "value deg: %f", encoder_3.angle_degrees);
 
-    ESP_LOGI(encoder_0.label, "value: %d", encoder_0.accumulated_steps);
-    ESP_LOGI(encoder_1.label, "value: %d", encoder_1.accumulated_steps);
-    ESP_LOGI(encoder_2.label, "value: %d", encoder_2.accumulated_steps);
-    ESP_LOGI(encoder_3.label, "value: %d", encoder_3.accumulated_steps);
+    ESP_LOGI(encoder_0.label, "steps: %d", encoder_0.accumulated_steps);
+    ESP_LOGI(encoder_1.label, "steps: %d", encoder_1.accumulated_steps);
+    ESP_LOGI(encoder_2.label, "steps: %d", encoder_2.accumulated_steps);
+    ESP_LOGI(encoder_3.label, "steps: %d", encoder_3.accumulated_steps);
 
     ESP_LOGI("", "");
-    /* ESP_LOGI("loop_scara_readings", "motor freq: %f", */
-    /* motor_b.pwm_vars->current_freq_hz); */
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
   return;
 }
 
-#include "loadcell.h"
-
-// Configuration for HX711 sensor 1
-hx711_config_t hx711_config_1 = {
-    .data_pin = HX711_1_DATA_PIN,
-    .clock_pin = HX711_1_CLOCK_PIN,
-    .gain = HX711_GAIN_128,
-    .offset = 0,
-    .scale = 1.0f,
-    .sensor_id = HX711_SENSOR_1,
-};
-
-// Configuration for HX711 sensor 2
-hx711_config_t hx711_config_2 = {
-    .data_pin = HX711_2_DATA_PIN,
-    .clock_pin = HX711_2_CLOCK_PIN,
-    .gain = HX711_GAIN_128,
-    .offset = 0,
-    .scale = 1.0f,
-    .sensor_id = HX711_SENSOR_2,
-};
-
-void calibration_task(void *pvParameters) {
-  ESP_LOGI(TAG, "Starting calibration process for both sensors...");
-
-  // Wait a bit for system to stabilize
-  vTaskDelay(2000 / portTICK_PERIOD_MS);
-
-  // Step 1: Tare both scales
-  ESP_LOGI(TAG, "Please ensure no weight is on either scale");
-  ESP_LOGI(TAG, "Taring both sensors in 5 seconds...");
-  vTaskDelay(5000 / portTICK_PERIOD_MS);
-
-  hx711_tare(&hx711_config_1, 10); // Average of 10 readings
-  hx711_tare(&hx711_config_2, 10); // Average of 10 readings
-
-  // Step 2: Calibrate sensor 1
-  ESP_LOGI(TAG, "Please place a known weight on SENSOR 1 ONLY");
-  ESP_LOGI(TAG, "Calibrating sensor 1 in 10 seconds...");
-  vTaskDelay(10000 / portTICK_PERIOD_MS);
-
-  float calibration_weight_1 = 100.0f; // 100 grams
-  hx711_calibrate(&hx711_config_1, calibration_weight_1, 10);
-
-  ESP_LOGI(TAG, "Remove weight from sensor 1");
-  vTaskDelay(3000 / portTICK_PERIOD_MS);
-
-  // Step 3: Calibrate sensor 2
-  ESP_LOGI(TAG, "Please place a known weight on SENSOR 2 ONLY");
-  ESP_LOGI(TAG, "Calibrating sensor 2 in 10 seconds...");
-  vTaskDelay(10000 / portTICK_PERIOD_MS);
-
-  float calibration_weight_2 = 100.0f; // 100 grams
-  hx711_calibrate(&hx711_config_2, calibration_weight_2, 10);
-
-  ESP_LOGI(TAG, "Calibration complete for both sensors!");
-  ESP_LOGI(TAG, "Sensor 1 - Offset: %ld, Scale: %.6f", hx711_config_1.offset,
-           hx711_config_1.scale);
-  ESP_LOGI(TAG, "Sensor 2 - Offset: %ld, Scale: %.6f", hx711_config_2.offset,
-           hx711_config_2.scale);
-
-  // Delete this task as calibration is done
-  vTaskDelete(NULL);
-}
-
-void display_task(void *pvParameters) {
-  ESP_LOGI(TAG, "Display task started");
-
-  while (1) {
-    ESP_LOGI(TAG, "=== HX711 Dual Sensor Readings ===");
-
-    // Display sensor 1 data
-    if (g_hx711_data[HX711_SENSOR_1].data_ready) {
-      ESP_LOGI(TAG,
-               "Sensor 1: %.2f g (%.3f kg) | Raw: %ld | Updated: %lu ms ago",
-               g_hx711_data[HX711_SENSOR_1].weight_grams,
-               g_hx711_data[HX711_SENSOR_1].weight_kg,
-               g_hx711_data[HX711_SENSOR_1].raw_value,
-               (esp_timer_get_time() / 1000) -
-                   g_hx711_data[HX711_SENSOR_1].last_update_ms);
-    } else {
-      ESP_LOGW(TAG, "Sensor 1: No data available");
-    }
-
-    // Display sensor 2 data
-    if (g_hx711_data[HX711_SENSOR_2].data_ready) {
-      ESP_LOGI(TAG,
-               "Sensor 2: %.2f g (%.3f kg) | Raw: %ld | Updated: %lu ms ago",
-               g_hx711_data[HX711_SENSOR_2].weight_grams,
-               g_hx711_data[HX711_SENSOR_2].weight_kg,
-               g_hx711_data[HX711_SENSOR_2].raw_value,
-               (esp_timer_get_time() / 1000) -
-                   g_hx711_data[HX711_SENSOR_2].last_update_ms);
-    } else {
-      ESP_LOGW(TAG, "Sensor 2: No data available");
-    }
-
-    // Calculate total weight if both sensors have data
-    if (g_hx711_data[HX711_SENSOR_1].data_ready &&
-        g_hx711_data[HX711_SENSOR_2].data_ready) {
-      float total_weight_g = g_hx711_data[HX711_SENSOR_1].weight_grams +
-                             g_hx711_data[HX711_SENSOR_2].weight_grams;
-      float total_weight_kg = total_weight_g / 1000.0f;
-      ESP_LOGI(TAG, "Total Weight: %.2f g (%.3f kg)", total_weight_g,
-               total_weight_kg);
-    }
-
-    ESP_LOGI(TAG, "================================");
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-  }
-}
-
-void force_sensor_initialization_func() {
-  ESP_LOGI(TAG, "Dual HX711 Force Sensor Application Starting...");
-
-  // Initialize HX711 sensor 1
-  esp_err_t ret1 = hx711_init(&hx711_config_1);
-  if (ret1 != ESP_OK) {
-    ESP_LOGE(TAG, "Failed to initialize HX711 sensor 1: %s",
-             esp_err_to_name(ret1));
-    ESP_LOGE(TAG, "Please check sensor 1 connections:");
-    ESP_LOGE(TAG, "1. HX711 VDD connected to 3.3V or 5V");
-    ESP_LOGE(TAG, "2. HX711 GND connected to ESP32 GND");
-    ESP_LOGE(TAG, "3. HX711 DT connected to GPIO %d", HX711_1_DATA_PIN);
-    ESP_LOGE(TAG, "4. HX711 SCK connected to GPIO %d", HX711_1_CLOCK_PIN);
-    ESP_LOGE(TAG, "5. Load cell properly connected to HX711");
-    return;
-  }
-
-  // Initialize HX711 sensor 2
-  esp_err_t ret2 = hx711_init(&hx711_config_2);
-  if (ret2 != ESP_OK) {
-    ESP_LOGE(TAG, "Failed to initialize HX711 sensor 2: %s",
-             esp_err_to_name(ret2));
-    ESP_LOGE(TAG, "Please check sensor 2 connections:");
-    ESP_LOGE(TAG, "1. HX711 VDD connected to 3.3V or 5V");
-    ESP_LOGE(TAG, "2. HX711 GND connected to ESP32 GND");
-    ESP_LOGE(TAG, "3. HX711 DT connected to GPIO %d", HX711_2_DATA_PIN);
-    ESP_LOGE(TAG, "4. HX711 SCK connected to GPIO %d", HX711_2_CLOCK_PIN);
-    ESP_LOGE(TAG, "5. Load cell properly connected to HX711");
-    return;
-  }
-
-  ESP_LOGI(TAG, "Both HX711 sensors initialized successfully!");
-
-  // Create calibration task (runs once)
-  xTaskCreate(calibration_task, "calibration_task", 4096, NULL, 5, NULL);
-
-  // Create HX711 reading tasks for both sensors
-  xTaskCreate(hx711_task, "hx711_task_1", 4096, &hx711_config_1, 6, NULL);
-  xTaskCreate(hx711_task, "hx711_task_2", 4096, &hx711_config_2, 6, NULL);
-
-  // Create display task
-  xTaskCreate(display_task, "display_task", 4096, NULL, 4, NULL);
-
-  ESP_LOGI(TAG, "All tasks created successfully");
-
-  while (1) {
-    // Example: Access global data structures for both sensors
-    if (g_hx711_data[HX711_SENSOR_1].data_ready &&
-        g_hx711_data[HX711_SENSOR_2].data_ready) {
-      // You can use both sensors' data from anywhere in your application
-      // g_hx711_data[HX711_SENSOR_1].weight_grams,
-      // g_hx711_data[HX711_SENSOR_1].weight_kg
-      // g_hx711_data[HX711_SENSOR_2].weight_grams,
-      // g_hx711_data[HX711_SENSOR_2].weight_kg
-    }
-    vTaskDelay(5000 / portTICK_PERIOD_MS);
-  }
-}
-
 void init_scara() {
-  /* force_sensor_initialization_func(); */
   /* wifi_initialization_func(); */
   switch_initialization_task();
   encoder_initialization_task();
   motor_initialization_task();
   /* xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL); */
   xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL);
-  /* calibration_initialization_task(); */
+  /* hx711_initialization_func(); */
+
+  calibration_initialization_task();
   ESP_LOGI(TAG, "init_scara completed");
 }

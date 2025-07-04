@@ -31,6 +31,9 @@ typedef struct {
   float velocity_hz_per_s;
 
   bool dir_is_reversed;
+
+  int target_steps;
+  bool step_counting_enabled;
 } motor_pwm_vars_t;
 
 #include "encoder.h"
@@ -65,6 +68,10 @@ void motor_delete_timer(motor_t *motor);
 esp_err_t motor_set_target_frequency(motor_t *motor, float target_freq_hz);
 esp_err_t motor_create_pwm_with_frequency(motor_t *motor, float freq_hz);
 
-
+void motor_reset_step_count(motor_t *motor);
+void motor_enable_step_counting(motor_t *motor, bool enable);
+esp_err_t motor_set_target_steps(motor_t *motor, int target_steps);
+int motor_get_step_count(motor_t *motor);
+esp_err_t motor_move_steps(motor_t *motor, int steps, float frequency);
 
 #endif // MOTOR_H
