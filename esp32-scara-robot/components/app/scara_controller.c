@@ -431,7 +431,7 @@ motor_pwm_vars_t pwm_vars_y = {
     .max_accel = 3000,
     .current_freq_hz = 0,
     .target_freq_hz = 0,
-    .dir_is_reversed = false,
+    .dir_is_reversed = true,
 };
 
 motor_pwm_vars_t pwm_vars_z = {
@@ -441,7 +441,7 @@ motor_pwm_vars_t pwm_vars_z = {
     .max_accel = 3000,
     .current_freq_hz = 0,
     .target_freq_hz = 0,
-    .dir_is_reversed = false,
+    .dir_is_reversed = true,
 };
 
 motor_pwm_vars_t pwm_vars_a = {
@@ -551,7 +551,7 @@ motor_t motor_y = {
     .mcpwm_vars = &mcpwm_vars_y,
     .pwm_vars = &pwm_vars_y,
     .control_vars = &control_vars_y,
-    .is_inverted = false,
+    .is_inverted = true,
 };
 
 motor_t motor_z = {
@@ -630,16 +630,13 @@ void motor_initialization_task() {
 
   xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_y, 5, NULL);
   xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_z, 5, NULL);
-
-  /* xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_z, 5, NULL);
-   */
   return;
 }
 
 void calibration_initialization_task() {
   gpio_set_level(motor_x.gpio_dir, true);
-  gpio_set_level(motor_y.gpio_dir, false);
-  gpio_set_level(motor_z.gpio_dir, true);
+  gpio_set_level(motor_y.gpio_dir, true);
+  gpio_set_level(motor_z.gpio_dir, false);
   gpio_set_level(motor_a.gpio_dir, false);
   gpio_set_level(motor_b.gpio_dir, false);
 
@@ -652,6 +649,7 @@ void calibration_initialization_task() {
   motor_move_steps(&motor_x, 6400 * 10 / 6 * 5, motor_x.pwm_vars->max_freq);
 
   motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq / 4);
+  /* motor_y.pwm_vars->target_freq_hz = motor_y.pwm_vars->max_freq / 4; */
   while (!motor_y.control_vars->ref_switch->is_pressed) {
     ESP_LOGI("calibration_initialization_task", "calibrating motor_y");
     vTaskDelay(20);
@@ -683,10 +681,6 @@ void calibration_initialization_task() {
   /* encoder_zero_position(motor_z.control_vars->ref_encoder); */
   /* motor_z.control_vars->encoder_target_pos = 0; */
 
-  while (1) {
-    vTaskDelay(5000);
-  }
-
   /* // go to middle */
   /* motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq / 4); */
   /* while (!motor_z.control_vars->ref_switch->is_pressed) { */
@@ -694,7 +688,21 @@ void calibration_initialization_task() {
   /*   vTaskDelay(20); */
   /* } */
   // set new value
+  ESP_LOGW("calibration", "\n\n\nAll calibrations done!\n\n\n");
 
+  // testing ratios
+
+  motor_y.control_vars->encoder_target_pos =
+      -90 * motor_y.control_vars->ref_encoder->encoder_resolution / 360 *
+      motor_y.control_vars->ref_encoder->gear_ratio;
+
+  motor_z.control_vars->encoder_target_pos =
+      90 * motor_z.control_vars->ref_encoder->encoder_resolution / 360 *
+          motor_z.control_vars->ref_encoder->gear_ratio +
+      motor_y.control_vars->encoder_target_pos;
+
+  ESP_LOGI("test", "changing target pos to %f",
+           motor_z.control_vars->encoder_target_pos);
   return;
 }
 
@@ -807,8 +815,8 @@ void hx711_initialization_func() {
 
   xTaskCreate(hx711_task, "hx711_0_task", 4096, &hx711_0, 5, NULL);
   xTaskCreate(hx711_task, "hx712_1_task", 4096, &hx711_1, 5, NULL);
-
-  /* xTaskCreate(hx711_avg_task, "hx712_1_avg_task", 4096, &hx711_1, 5, NULL); */
+  /* xTaskCreate(hx711_avg_task, "hx712_1_avg_task", 4096, &hx711_1, 5, NULL);
+   */
   return;
 }
 
@@ -817,15 +825,15 @@ void loop_scara_readings() {
     ESP_LOGI("switch_0", "is pressed: %d", switch_0.is_pressed);
     ESP_LOGI("switch_1", "is pressed: %d", switch_1.is_pressed);
 
-    ESP_LOGI(encoder_0.label, "value: %f", encoder_0.angle_degrees);
-    ESP_LOGI(encoder_1.label, "value: %f", encoder_1.angle_degrees);
-    ESP_LOGI(encoder_2.label, "value: %f", encoder_2.angle_degrees);
-    ESP_LOGI(encoder_3.label, "value: %f", encoder_3.angle_degrees);
+    ESP_LOGI(encoder_0.label, "value deg: %f", encoder_0.angle_degrees);
+    ESP_LOGI(encoder_1.label, "value deg: %f", encoder_1.angle_degrees);
+    ESP_LOGI(encoder_2.label, "value deg: %f", encoder_2.angle_degrees);
+    ESP_LOGI(encoder_3.label, "value deg: %f", encoder_3.angle_degrees);
 
-    ESP_LOGI(encoder_0.label, "value: %d", encoder_0.accumulated_steps);
-    ESP_LOGI(encoder_1.label, "value: %d", encoder_1.accumulated_steps);
-    ESP_LOGI(encoder_2.label, "value: %d", encoder_2.accumulated_steps);
-    ESP_LOGI(encoder_3.label, "value: %d", encoder_3.accumulated_steps);
+    ESP_LOGI(encoder_0.label, "steps: %d", encoder_0.accumulated_steps);
+    ESP_LOGI(encoder_1.label, "steps: %d", encoder_1.accumulated_steps);
+    ESP_LOGI(encoder_2.label, "steps: %d", encoder_2.accumulated_steps);
+    ESP_LOGI(encoder_3.label, "steps: %d", encoder_3.accumulated_steps);
 
     ESP_LOGI("", "");
     vTaskDelay(1000 / portTICK_PERIOD_MS);
@@ -835,12 +843,13 @@ void loop_scara_readings() {
 
 void init_scara() {
   /* wifi_initialization_func(); */
-  /* switch_initialization_task(); */
-  /* encoder_initialization_task(); */
-  /* motor_initialization_task(); */
+  switch_initialization_task();
+  encoder_initialization_task();
+  motor_initialization_task();
   /* xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL); */
-  /* xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL); */
-  hx711_initialization_func();
+  xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL);
+  /* hx711_initialization_func(); */
 
+  calibration_initialization_task();
   ESP_LOGI(TAG, "init_scara completed");
 }
