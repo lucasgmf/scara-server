@@ -62,4 +62,21 @@ void hx711_power_down(hx711_config_t *config);
 void hx711_power_up(hx711_config_t *config);
 void hx711_task(void *pvParameters);
 
+// Add command structure for thread-safe operations
+typedef struct {
+  bool tare_requested;
+  bool tare_completed;
+  bool calibrate_requested;
+  bool calibrate_completed;
+  float calibration_weight;
+  uint8_t samples;
+} hx711_command_t;
+
+// Global command instances
+extern hx711_command_t g_hx711_commands[HX711_SENSOR_COUNT];
+
+// New thread-safe function prototypes
+void hx711_tare_safe(hx711_sensor_id_t sensor_id, uint8_t samples);
+void hx711_calibrate_safe(hx711_sensor_id_t sensor_id, float known_weight_grams,
+                          uint8_t samples);
 #endif // LOADCELL_H
