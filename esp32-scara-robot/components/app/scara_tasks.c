@@ -179,7 +179,8 @@ void encoder_task(void *arg) {
 
     // Optional: Log current position periodically
     /* static uint32_t log_counter = 0; */
-    /* if (++log_counter % 100 == 0) { // Log every 5 seconds at 50ms intervals */
+    /* if (++log_counter % 100 == 0) { // Log every 5 seconds at 50ms intervals
+     */
     /*   ESP_LOGI(encoder->label, */
     /*            "Raw: %d, Steps: %ld, Motor: %.2f°, Output: %.2f°", */
     /*            current_angle, encoder->accumulated_steps, */
@@ -217,7 +218,7 @@ void motor_control_task(void *arg) {
   while (1) {
 
     if (!motor->control_vars->ref_encoder->is_calibrated) {
-    /* ESP_LOGI("motor_control_task", "encoder is not calibrated"); */
+      /* ESP_LOGI("motor_control_task", "encoder is not calibrated"); */
       vTaskDelay(pdMS_TO_TICKS(MOTOR_CONTROL_TASK_PERIOD_MS));
       continue;
     }
@@ -308,5 +309,74 @@ void switch_task(void *arg) {
     /* ESP_LOGI("switch_task", "value of switch_n is %d", switch_n->is_pressed);
      */
     vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
+
+void hx711_task(void *arg) {
+  hx711_t *hx711_n = (hx711_t *)arg;
+  if (hx711_n == NULL) {
+    ESP_LOGE(TAG, "Parameter is null, aborting.");
+    vTaskDelete(NULL);
+    return;
+  }
+
+  while (1) {
+    hx711_read_raw(hx711_n);
+    ESP_LOGI("hx711_task", "value of hx711 with label %s is %d", hx711_n->label,
+             hx711_n->raw_read);
+
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+}
+
+void hx711_avg_task(void *arg) {
+  hx711_t *hx711 = (hx711_t *)arg;
+  if (hx711 == NULL) {
+    ESP_LOGE(TAG, "Parameter is null, aborting.");
+    vTaskDelete(NULL);
+    return;
+  }
+
+  while (1) {
+    int64_t sum = 0;
+    int num_samples = 10;
+
+    for (int s = 0; s < num_samples; s++) {
+      // Wait until HX711 is ready
+      while (gpio_get_level(hx711->data_pin) == 1) {
+        vTaskDelay(pdMS_TO_TICKS(1));
+      }
+
+      // Read 24 bits
+      uint32_t data = 0;
+      for (int i = 0; i < 24; i++) {
+        gpio_set_level(hx711->clock_pin, 1);
+        vTaskDelay(pdMS_TO_TICKS(1));
+        data = (data << 1) | gpio_get_level(hx711->data_pin);
+        gpio_set_level(hx711->clock_pin, 0);
+        vTaskDelay(pdMS_TO_TICKS(1));
+      }
+
+      // Set gain (1:128, 2:64, 3:32)
+      for (int i = 0; i < hx711->gain; i++) {
+        gpio_set_level(hx711->clock_pin, 1);
+        vTaskDelay(pdMS_TO_TICKS(1));
+        gpio_set_level(hx711->clock_pin, 0);
+        vTaskDelay(pdMS_TO_TICKS(1));
+      }
+
+      // Sign-extend 24-bit to 32-bit
+      if (data & 0x800000) {
+        data |= 0xFF000000;
+      }
+
+      int32_t signed_data = (int32_t)data;
+      sum += signed_data;
+
+      vTaskDelay(pdMS_TO_TICKS(25));
+    }
+
+    int32_t average = sum / num_samples;
+    ESP_LOGI("average", "Average HX711 reading: %ld\n", average);
   }
 }
