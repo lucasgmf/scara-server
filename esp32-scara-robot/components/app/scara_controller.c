@@ -458,7 +458,7 @@ motor_pwm_vars_t pwm_vars_b = {
     .step_count = 0,
     .max_freq = 1000,
     .min_freq = 0,
-    .max_accel = 3000,
+    .max_accel = 5000,
     .current_freq_hz = 0,
     .target_freq_hz = 0,
     .dir_is_reversed = false,
@@ -713,63 +713,85 @@ void loop_scara_task() {
     /**/
     /* gpio_set_level(motor_z.gpio_dir, 1); */
     /* gpio_set_level(motor_z.gpio_stp, 1); */
-    /**/
+
     /* gpio_set_level(motor_a.gpio_dir, 1); */
     /* gpio_set_level(motor_a.gpio_stp, 1); */
-    /**/
+
     /* gpio_set_level(motor_b.gpio_stp, 1); */
     /* gpio_set_level(motor_b.gpio_dir, 1); */
-    /**/
+
     /* gpio_set_level(motor_z.gpio_dir, 1); */
     /* gpio_set_level(motor_a.gpio_dir, 1); */
     /* gpio_set_level(motor_b.gpio_dir, 1); */
 
-    /* gpio_set_level(motor_x.gpio_dir, 1); */
-    /* gpio_set_level(motor_y.gpio_dir, 1); */
-    /* gpio_set_level(motor_z.gpio_dir, 1); */
-    /* gpio_set_level(motor_a.gpio_dir, 1); */
+    gpio_set_level(motor_x.gpio_dir, 1);
+    gpio_set_level(motor_y.gpio_dir, 1);
+    gpio_set_level(motor_z.gpio_dir, 1);
+    gpio_set_level(motor_a.gpio_dir, 1);
     gpio_set_level(motor_b.gpio_dir, 1);
 
-    /* motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq); */
-    /* motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq); */
-    /* motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq); */
-    /* motor_set_target_frequency(&motor_a, motor_a.pwm_vars->max_freq); */
+    motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq);
+    motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq);
+    motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq);
+    motor_set_target_frequency(&motor_a, motor_a.pwm_vars->max_freq);
     motor_set_target_frequency(&motor_b, motor_b.pwm_vars->max_freq);
-    motor_move_steps(&motor_x, -4000, motor_x.pwm_vars->max_freq);
+    /* motor_move_steps(&motor_x, -4000, motor_x.pwm_vars->max_freq); */
     vTaskDelay(3000 / portTICK_PERIOD_MS);
 
-    /* motor_set_target_frequency(&motor_x, 0); */
-    /* motor_set_target_frequency(&motor_y, 0); */
-    /* motor_set_target_frequency(&motor_z, 0); */
-    /* motor_set_target_frequency(&motor_a, 0); */
+    motor_set_target_frequency(&motor_x, 0);
+    motor_set_target_frequency(&motor_y, 0);
+    motor_set_target_frequency(&motor_z, 0);
+    motor_set_target_frequency(&motor_a, 0);
     motor_set_target_frequency(&motor_b, 0);
-    motor_move_steps(&motor_x, 4000, motor_x.pwm_vars->max_freq);
+    /* motor_move_steps(&motor_x, 4000, motor_x.pwm_vars->max_freq); */
     vTaskDelay(3000 / portTICK_PERIOD_MS);
 
-    /* ESP_LOGI("loop_scara_task", "dir 0"); */
-    /* gpio_set_level(motor_x.gpio_dir, 0); */
-    /* gpio_set_level(motor_y.gpio_dir, 0); */
-    /* gpio_set_level(motor_z.gpio_dir, 0); */
-    /* gpio_set_level(motor_a.gpio_dir, 0); */
-    motor_move_steps(&motor_x, -1000, motor_x.pwm_vars->max_freq);
+    ESP_LOGI("loop_scara_task", "dir 0");
+    gpio_set_level(motor_x.gpio_dir, 0);
+    gpio_set_level(motor_y.gpio_dir, 0);
+    gpio_set_level(motor_z.gpio_dir, 0);
+    gpio_set_level(motor_a.gpio_dir, 0);
     gpio_set_level(motor_b.gpio_dir, 0);
+    /* motor_move_steps(&motor_x, -1000, motor_x.pwm_vars->max_freq); */
 
-    /* motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq); */
-    /* motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq); */
-    /* motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq); */
-    /* motor_set_target_frequency(&motor_a, motor_a.pwm_vars->max_freq); */
-    motor_move_steps(&motor_x, 1000, motor_x.pwm_vars->max_freq);
+    motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq);
+    motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq);
+    motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq);
+    motor_set_target_frequency(&motor_a, motor_a.pwm_vars->max_freq);
     motor_set_target_frequency(&motor_b, motor_b.pwm_vars->max_freq);
+    /* motor_move_steps(&motor_x, 1000, motor_x.pwm_vars->max_freq); */
     vTaskDelay(3000 / portTICK_PERIOD_MS);
 
-    /* motor_set_target_frequency(&motor_x, 0); */
-    /* motor_set_target_frequency(&motor_y, 0); */
-    /* motor_set_target_frequency(&motor_z, 0); */
-    /* motor_set_target_frequency(&motor_a, 0); */
+    motor_set_target_frequency(&motor_x, 0);
+    motor_set_target_frequency(&motor_y, 0);
+    motor_set_target_frequency(&motor_z, 0);
+    motor_set_target_frequency(&motor_a, 0);
     motor_set_target_frequency(&motor_b, 0);
     vTaskDelay(3000 / portTICK_PERIOD_MS);
   }
 }
+
+#include "loadcell.h"
+
+// Configuration for HX711 sensor 1
+hx711_config_t hx711_config_1 = {
+    .data_pin = HX711_1_DATA_PIN,
+    .clock_pin = HX711_1_CLOCK_PIN,
+    .gain = HX711_GAIN_64,
+    .offset = 0,
+    .scale = 1.0f,
+    .sensor_id = HX711_SENSOR_1,
+};
+
+// Configuration for HX711 sensor 2
+hx711_config_t hx711_config_2 = {
+    .data_pin = HX711_2_DATA_PIN,
+    .clock_pin = HX711_2_CLOCK_PIN,
+    .gain = HX711_GAIN_64,
+    .offset = 0,
+    .scale = 1.0f,
+    .sensor_id = HX711_SENSOR_2,
+};
 
 void loop_scara_readings() {
   while (1) {
@@ -786,6 +808,12 @@ void loop_scara_readings() {
     ESP_LOGI(encoder_2.label, "value: %d", encoder_2.accumulated_steps);
     ESP_LOGI(encoder_3.label, "value: %d", encoder_3.accumulated_steps);
 
+    // Temporary test - read raw values directly
+    int32_t test_raw1 = hx711_read_raw(&hx711_config_1);
+    int32_t test_raw2 = hx711_read_raw(&hx711_config_2);
+    ESP_LOGI(TAG, "Raw after tare - Sensor 1: %ld, Sensor 2: %ld", test_raw1,
+             test_raw2);
+
     ESP_LOGI("", "");
     /* ESP_LOGI("loop_scara_readings", "motor freq: %f", */
     /* motor_b.pwm_vars->current_freq_hz); */
@@ -794,66 +822,146 @@ void loop_scara_readings() {
   return;
 }
 
-#include "loadcell.h"
-
-// Configuration for HX711 sensor 1
-hx711_config_t hx711_config_1 = {
-    .data_pin = HX711_1_DATA_PIN,
-    .clock_pin = HX711_1_CLOCK_PIN,
-    .gain = HX711_GAIN_128,
-    .offset = 0,
-    .scale = 1.0f,
-    .sensor_id = HX711_SENSOR_1,
-};
-
-// Configuration for HX711 sensor 2
-hx711_config_t hx711_config_2 = {
-    .data_pin = HX711_2_DATA_PIN,
-    .clock_pin = HX711_2_CLOCK_PIN,
-    .gain = HX711_GAIN_128,
-    .offset = 0,
-    .scale = 1.0f,
-    .sensor_id = HX711_SENSOR_2,
-};
-
 void calibration_task(void *pvParameters) {
   ESP_LOGI(TAG, "Starting calibration process for both sensors...");
 
   // Wait a bit for system to stabilize
   vTaskDelay(2000 / portTICK_PERIOD_MS);
 
-  // Step 1: Tare both scales
+  // Step 1: Check initial raw readings
+  ESP_LOGI(TAG, "=== INITIAL RAW READINGS ===");
+  /* int32_t initial_raw1 = hx711_read_raw(&hx711_config_1); */
+  int32_t initial_raw2 = hx711_read_raw(&hx711_config_2);
+  /* ESP_LOGI(TAG, "Sensor 1 initial raw: %ld", initial_raw1); */
+  ESP_LOGI(TAG, "Sensor 2 initial raw: %ld", initial_raw2);
+
+  // Step 2: Tare both scales
   ESP_LOGI(TAG, "Please ensure no weight is on either scale");
   ESP_LOGI(TAG, "Taring both sensors in 5 seconds...");
   vTaskDelay(5000 / portTICK_PERIOD_MS);
 
+  // Reset scale to 1.0 before taring (important!)
+  /* hx711_config_1.scale = 1.0f; */
+  hx711_config_2.scale = 1.0f;
+
+  ESP_LOGI(TAG, "=== BEFORE TARING ===");
+  /* ESP_LOGI(TAG, "Sensor 1 - Offset: %ld, Scale: %.6f", hx711_config_1.offset, */
+  /*          hx711_config_1.scale); */
+  ESP_LOGI(TAG, "Sensor 2 - Offset: %ld, Scale: %.6f", hx711_config_2.offset,
+           hx711_config_2.scale);
+
   hx711_tare(&hx711_config_1, 10); // Average of 10 readings
-  hx711_tare(&hx711_config_2, 10); // Average of 10 readings
+  /* hx711_tare(&hx711_config_2, 10); // Average of 10 readings */
 
-  // Step 2: Calibrate sensor 1
-  ESP_LOGI(TAG, "Please place a known weight on SENSOR 1 ONLY");
-  ESP_LOGI(TAG, "Calibrating sensor 1 in 10 seconds...");
-  vTaskDelay(10000 / portTICK_PERIOD_MS);
+  ESP_LOGI(TAG, "=== AFTER TARING ===");
+  /* ESP_LOGI(TAG, "Sensor 1 - Offset: %ld, Scale: %.6f", hx711_config_1.offset, */
+  /*          hx711_config_1.scale); */
+  ESP_LOGI(TAG, "Sensor 2 - Offset: %ld, Scale: %.6f", hx711_config_2.offset,
+           hx711_config_2.scale);
 
-  float calibration_weight_1 = 100.0f; // 100 grams
-  hx711_calibrate(&hx711_config_1, calibration_weight_1, 10);
+  // Step 3: Verify taring by reading raw values multiple times
+  ESP_LOGI(TAG, "=== VERIFYING TARE (5 readings each) ===");
+  for (int i = 0; i < 5; i++) {
+    /* int32_t raw1 = hx711_read_raw(&hx711_config_1); */
+    int32_t raw2 = hx711_read_raw(&hx711_config_2);
 
-  ESP_LOGI(TAG, "Remove weight from sensor 1");
-  vTaskDelay(3000 / portTICK_PERIOD_MS);
+    // Calculate what the weight should be manually
+    /* float weight1 = (raw1 - hx711_config_1.offset) / hx711_config_1.scale; */
+    float weight2 = (raw2 - hx711_config_2.offset) / hx711_config_2.scale;
 
-  // Step 3: Calibrate sensor 2
-  ESP_LOGI(TAG, "Please place a known weight on SENSOR 2 ONLY");
-  ESP_LOGI(TAG, "Calibrating sensor 2 in 10 seconds...");
-  vTaskDelay(10000 / portTICK_PERIOD_MS);
+    ESP_LOGI(TAG, "Reading %d:", i + 1);
+    /* ESP_LOGI(TAG, "  Sensor 1 - Raw: %ld, Calculated weight: %.2f g", raw1, */
+    /*          weight1); */
+    ESP_LOGI(TAG, "  Sensor 2 - Raw: %ld, Calculated weight: %.2f g", raw2,
+             weight2);
 
-  float calibration_weight_2 = 100.0f; // 100 grams
+    vTaskDelay(500 / portTICK_PERIOD_MS);
+  }
+
+  // Step 4: Check if the problem is in the global data structure update
+  ESP_LOGI(TAG, "=== CHECKING GLOBAL DATA STRUCTURE ===");
+  ESP_LOGI(TAG, "Waiting 2 seconds for data to update...");
+  vTaskDelay(2000 / portTICK_PERIOD_MS);
+
+  /* if (g_hx711_data[HX711_SENSOR_1].data_ready) { */
+  /*   ESP_LOGI(TAG, "Sensor 1 global data:"); */
+  /*   ESP_LOGI(TAG, "  Raw: %ld", g_hx711_data[HX711_SENSOR_1].raw_value); */
+  /*   ESP_LOGI(TAG, "  Weight: %.2f g", */
+  /*            g_hx711_data[HX711_SENSOR_1].weight_grams); */
+  /*   ESP_LOGI(TAG, "  Expected raw after offset: %ld", */
+  /*            g_hx711_data[HX711_SENSOR_1].raw_value - hx711_config_1.offset); */
+  /* } */
+
+  if (g_hx711_data[HX711_SENSOR_2].data_ready) {
+    ESP_LOGI(TAG, "Sensor 2 global data:");
+    ESP_LOGI(TAG, "  Raw: %ld", g_hx711_data[HX711_SENSOR_2].raw_value);
+    ESP_LOGI(TAG, "  Weight: %.2f g",
+             g_hx711_data[HX711_SENSOR_2].weight_grams);
+    ESP_LOGI(TAG, "  Expected raw after offset: %ld",
+             g_hx711_data[HX711_SENSOR_2].raw_value - hx711_config_2.offset);
+  }
+
+  // Only continue with calibration if taring worked
+  ESP_LOGI(TAG, "=== TARING ANALYSIS ===");
+  /* int32_t final_raw1 = hx711_read_raw(&hx711_config_1); */
+  int32_t final_raw2 = hx711_read_raw(&hx711_config_2);
+  /* int32_t adjusted_raw1 = final_raw1 - hx711_config_1.offset; */
+  int32_t adjusted_raw2 = final_raw2 - hx711_config_2.offset;
+
+  /* ESP_LOGI(TAG, "Sensor 1: Raw=%ld, Offset=%ld, Adjusted=%ld", final_raw1, */
+  /*          hx711_config_1.offset, adjusted_raw1); */
+  ESP_LOGI(TAG, "Sensor 2: Raw=%ld, Offset=%ld, Adjusted=%ld", final_raw2,
+           hx711_config_2.offset, adjusted_raw2);
+
+  /* if (abs(adjusted_raw1) > 1000 || abs(adjusted_raw2) > 1000) { */
+  /*   ESP_LOGE(TAG, */
+  /*            "TARING FAILED! Adjusted raw values should be close to zero."); */
+  /*   ESP_LOGE(TAG, */
+  /*            "This indicates a problem with the HX711 library or hardware."); */
+  /*   ESP_LOGE(TAG, "Debug suggestions:"); */
+  /*   ESP_LOGE(TAG, */
+  /*            "1. Check if hx711_tare() actually updates the offset correctly"); */
+  /*   ESP_LOGE(TAG, */
+  /*            "2. Check if the offset is being used in weight calculations"); */
+  /*   ESP_LOGE(TAG, "3. Verify hardware connections are stable"); */
+  /*   ESP_LOGE(TAG, "4. Try power cycling the load cells"); */
+
+    // Don't continue with calibration if taring failed
+    /* ESP_LOGE(TAG, "Stopping calibration process due to taring failure"); */
+    /* vTaskDelete(NULL); */
+  /*   return; */
+  /* } */
+
+  ESP_LOGI(TAG, "Taring successful! Continuing with calibration...");
+
+  // Step 5: Calibrate sensor 1
+  /* ESP_LOGI(TAG, "Please place a known weight on SENSOR 1 ONLY"); */
+  /* ESP_LOGI(TAG, "Calibrating sensor 1 in 20 seconds..."); */
+  /* vTaskDelay(20000 / portTICK_PERIOD_MS); */
+
+  /* float calibration_weight_1 = 58.0f; // 58 grams */
+  /* hx711_calibrate(&hx711_config_1, calibration_weight_1, 10); */
+
+  /* ESP_LOGI(TAG, "Remove weight from sensor 1"); */
+  /* vTaskDelay(3000 / portTICK_PERIOD_MS); */
+
+  // Step 6: Calibrate sensor 2
+  ESP_LOGW(TAG, "Please place a known weight on SENSOR 2 ONLY");
+  ESP_LOGW(TAG, "Calibrating sensor 2 in 20 seconds...");
+  vTaskDelay(20000 / portTICK_PERIOD_MS);
+
+  float calibration_weight_2 = 241.0f;
   hx711_calibrate(&hx711_config_2, calibration_weight_2, 10);
 
   ESP_LOGI(TAG, "Calibration complete for both sensors!");
-  ESP_LOGI(TAG, "Sensor 1 - Offset: %ld, Scale: %.6f", hx711_config_1.offset,
-           hx711_config_1.scale);
+  /* ESP_LOGI(TAG, "Sensor 1 - Offset: %ld, Scale: %.6f", hx711_config_1.offset, */
+  /*          hx711_config_1.scale); */
   ESP_LOGI(TAG, "Sensor 2 - Offset: %ld, Scale: %.6f", hx711_config_2.offset,
            hx711_config_2.scale);
+
+  // Final test
+  ESP_LOGI(TAG, "Final test - remove all weights and verify zero readings:");
+  vTaskDelay(30000 / portTICK_PERIOD_MS);
 
   // Delete this task as calibration is done
   vTaskDelete(NULL);
@@ -966,13 +1074,13 @@ void force_sensor_initialization_func() {
 }
 
 void init_scara() {
-  /* force_sensor_initialization_func(); */
+  force_sensor_initialization_func();
   /* wifi_initialization_func(); */
-  switch_initialization_task();
-  encoder_initialization_task();
-  motor_initialization_task();
+  /* switch_initialization_task(); */
+  /* encoder_initialization_task(); */
+  /* motor_initialization_task(); */
   /* xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL); */
   xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL);
-  calibration_initialization_task();
+  /* calibration_initialization_task(); */
   ESP_LOGI(TAG, "init_scara completed");
 }
