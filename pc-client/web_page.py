@@ -1,9 +1,8 @@
 from flask import Flask, request, jsonify, render_template
 import socket
 
-ESP32_IP = "192.168.225.67"
+ESP32_IP = "192.168.85.192"
 ESP32_PORT = 42424
-
 app = Flask(__name__)
 
 def send_to_esp32(data):
@@ -21,14 +20,22 @@ def send_to_esp32(data):
 @app.route("/", methods=["POST"])
 def receive_data():
     try:
-        numbers = [request.form.get(f"num{i}", "").strip() for i in range(1, 6)]
+        # Get boolean values
+        bool1 = request.form.get("bool1") == "true"
+        bool2 = request.form.get("bool2") == "true"
         
-        if not all(num.replace("-", "").replace(".", "", 1).isdigit() for num in numbers):
-            return "Invalid input", 400
+        # Get float values
+        floats = []
+        for i in range(1, 9):  # 8 floats
+            float_val = request.form.get(f"float{i}", "").strip()
+            if not float_val.replace("-", "").replace(".", "", 1).isdigit():
+                return f"Invalid input for float{i}", 400
+            floats.append(float_val)
         
-        data = ",".join(numbers) + "\n"
+        # Format: float1,float2,...,float8,bool1,bool2 (floats first, then booleans)
+        data = ",".join(floats) + f",{int(bool1)},{int(bool2)}\n"
         success = send_to_esp32(data)
-
+        
         if success:
             return "Values sent successfully!"
         else:
