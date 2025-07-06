@@ -207,8 +207,8 @@
             </div>
             <div id="lastUpdate">Last Update: Never</div>
             
-            <h3>Float Values</h3>
-            <div class="monitor-grid" id="floatValues">
+            <h3>Control Values (First 8 Floats)</h3>
+            <div class="monitor-grid" id="controlValues">
                 <div class="monitor-item">
                     <label>Kp</label>
                     <div class="value">--</div>
@@ -243,6 +243,34 @@
                 </div>
             </div>
             
+            <h3>Additional Monitoring Values (6 More Floats)</h3>
+            <div class="monitor-grid" id="additionalValues">
+                <div class="monitor-item">
+                    <label>Sensor 1</label>
+                    <div class="value">--</div>
+                </div>
+                <div class="monitor-item">
+                    <label>Sensor 2</label>
+                    <div class="value">--</div>
+                </div>
+                <div class="monitor-item">
+                    <label>Sensor 3</label>
+                    <div class="value">--</div>
+                </div>
+                <div class="monitor-item">
+                    <label>Sensor 4</label>
+                    <div class="value">--</div>
+                </div>
+                <div class="monitor-item">
+                    <label>Sensor 5</label>
+                    <div class="value">--</div>
+                </div>
+                <div class="monitor-item">
+                    <label>Sensor 6</label>
+                    <div class="value">--</div>
+                </div>
+            </div>
+            
             <h3>Boolean Values</h3>
             <div class="monitor-grid" id="booleanValues">
                 <div class="monitor-item">
@@ -264,7 +292,7 @@
     </div>
 
     <script>
-        // Try to initialize Socket.IO, but don't break if it's not available
+        // Initialize Socket.IO
         let socket;
         try {
             socket = io();
@@ -373,41 +401,30 @@
             document.getElementById('lastUpdate').textContent = 
                 'Last Update: ' + new Date(data.timestamp * 1000).toLocaleTimeString();
             
-            // Update float values
+            // Update control values (first 8 floats)
             if (data.floats && data.floats.length >= 8) {
-                const floatLabels = ['Kp', 'Ki', 'Kd', 'Target 1', 'Target 2', 'Value 6', 'Value 7', 'Value 8'];
-                const floatContainer = document.getElementById('floatValues');
-                floatContainer.innerHTML = '';
-                data.floats.forEach((value, index) => {
+                const controlLabels = ['Kp', 'Ki', 'Kd', 'Target 1', 'Target 2', 'Value 6', 'Value 7', 'Value 8'];
+                const controlContainer = document.getElementById('controlValues');
+                controlContainer.innerHTML = '';
+                for (let i = 0; i < 8; i++) {
                     const div = document.createElement('div');
                     div.className = 'monitor-item';
                     div.innerHTML = `
-                        <label>${floatLabels[index] || `Float ${index + 1}`}</label>
-                        <div class="value">${value.toFixed(3)}</div>
+                        <label>${controlLabels[i]}</label>
+                        <div class="value">${data.floats[i].toFixed(3)}</div>
                     `;
-                    floatContainer.appendChild(div);
-                });
+                    controlContainer.appendChild(div);
+                }
             }
             
-            // Update boolean values
-            if (data.booleans && data.booleans.length >= 2) {
-                const boolLabels = ['Feature 1', 'Feature 2'];
-                const boolContainer = document.getElementById('booleanValues');
-                boolContainer.innerHTML = '';
-                data.booleans.forEach((value, index) => {
+            // Update additional values (remaining 6 floats)
+            if (data.floats && data.floats.length >= 14) {
+                const additionalLabels = ['Sensor 1', 'Sensor 2', 'Sensor 3', 'Sensor 4', 'Sensor 5', 'Sensor 6'];
+                const additionalContainer = document.getElementById('additionalValues');
+                additionalContainer.innerHTML = '';
+                for (let i = 8; i < 14; i++) {
                     const div = document.createElement('div');
                     div.className = 'monitor-item';
                     div.innerHTML = `
-                        <label>${boolLabels[index] || `Boolean ${index + 1}`}</label>
-                        <div class="value">
-                            <span class="boolean-indicator ${value ? 'boolean-true' : 'boolean-false'}"></span>
-                            ${value ? 'True' : 'False'}
-                        </div>
-                    `;
-                    boolContainer.appendChild(div);
-                });
-            }
-        }
-    </script>
-</body>
-</html>
+                        <label>${additionalLabels[i - 8]}</label>
+                        <div class
