@@ -28,30 +28,24 @@ void tcp_server_task(void *arg) {
     vTaskDelete(NULL);
     return;
   }
-
   char rx_buffer[net_conf->rx_buffer_size];
   char addr_str[net_conf->addr_str_size];
-
   struct sockaddr_in dest_addr = {
       .sin_addr.s_addr = htonl(INADDR_ANY),
       .sin_family = AF_INET,
       .sin_port = htons(net_conf->port),
   };
-
   int listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
   if (handle_error(listen_sock < 0, "Unable to create socket", -1))
     return;
   ESP_LOGI(TAG, "Socket created");
-
   int err = bind(listen_sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
   if (handle_error(err != 0, "Socket bind failed", listen_sock))
     return;
   ESP_LOGI(TAG, "Socket bound, port %d", net_conf->port);
-
   err = listen(listen_sock, 1);
   if (handle_error(err != 0, "Listen failed", listen_sock))
     return;
-
   while (1) {
     ESP_LOGI(TAG, "Waiting for connection...");
     struct sockaddr_in6 source_addr;
@@ -61,11 +55,9 @@ void tcp_server_task(void *arg) {
       ESP_LOGE(TAG, "Unable to accept connection: errno %d", errno);
       break;
     }
-
     inet_ntoa_r(((struct sockaddr_in *)&source_addr)->sin_addr, addr_str,
                 sizeof(addr_str) - 1);
     ESP_LOGI(TAG, "Connection from %s", addr_str);
-
     while (1) {
       ESP_LOGI(TAG, "Free stack: %d", uxTaskGetStackHighWaterMark(NULL));
       int len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
@@ -75,36 +67,61 @@ void tcp_server_task(void *arg) {
       } else if (len == 0) {
         ESP_LOGI(TAG, "Connection closed");
         break;
-      }
-
-      else {
+      } else {
         rx_buffer[len] = 0;
         ESP_LOGI(TAG, "Received: %s", rx_buffer);
 
-        int count = sscanf(rx_buffer, "%f,%f,%f,%d,%d", &net_conf->rec_data->Kp,
-                           &net_conf->rec_data->Ki, &net_conf->rec_data->Kd,
-                           &net_conf->rec_data->target_position_1,
-                           &net_conf->rec_data->target_position_2);
+        // Variables to store the parsed values
+        float float_values[8];
+        int bool_values[2];
 
-        if (count == 5) {
+        // Parse 8 floats and 2 booleans (integers 0/1)
+        int count =
+            sscanf(rx_buffer, "%f,%f,%f,%f,%f,%f,%f,%f,%d,%d", &float_values[0],
+                   &float_values[1], &float_values[2], &float_values[3],
+                   &float_values[4], &float_values[5], &float_values[6],
+                   &float_values[7], &bool_values[0], &bool_values[1]);
+
+        if (count == 10) {
           ESP_LOGI(TAG, "Parsed values:");
-          ESP_LOGI(TAG, "Kp: %.2f, Ki: %.2f, Kd: %.2f", net_conf->rec_data->Kp,
-                   net_conf->rec_data->Ki, net_conf->rec_data->Kd);
-          ESP_LOGI(TAG, "Target: %.2f, Test Num: %.2f",
-                   net_conf->rec_data->target_position_1,
-                   net_conf->rec_data->target_position_2);
+          ESP_LOGI(
+              TAG,
+              "Float values: %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f",
+              float_values[0], float_values[1], float_values[2],
+              float_values[3], float_values[4], float_values[5],
+              float_values[6], float_values[7]);
+          ESP_LOGI(TAG, "Boolean values: %s, %s",
+                   bool_values[0] ? "true" : "false",
+                   bool_values[1] ? "true" : "false");
 
-          // Use parsed.Kp, parsed.Ki, etc. as needed in your control logic
+          // Store the parsed values in your data structure
+          // You'll need to update your rec_data structure to accommodate these
+          // values Example assignments (adjust based on your actual structure):
+          /*
+          net_conf->rec_data->float_val_1 = float_values[0];
+          net_conf->rec_data->float_val_2 = float_values[1];
+          net_conf->rec_data->float_val_3 = float_values[2];
+          net_conf->rec_data->float_val_4 = float_values[3];
+          net_conf->rec_data->float_val_5 = float_values[4];
+          net_conf->rec_data->float_val_6 = float_values[5];
+          net_conf->rec_data->float_val_7 = float_values[6];
+          net_conf->rec_data->float_val_8 = float_values[7];
+          net_conf->rec_data->bool_val_1 = (bool)bool_values[0];
+          net_conf->rec_data->bool_val_2 = (bool)bool_values[1];
+          */
+
+          // Use parsed values as needed in your control logic
         } else {
-          ESP_LOGW(TAG, "Failed to parse input data. Received: %s", rx_buffer);
+          ESP_LOGW(TAG,
+                   "Failed to parse input data. Expected 10 values, got %d. "
+                   "Received: %s",
+                   count, rx_buffer);
         }
       }
     }
-
     shutdown(sock, 0);
     close(sock);
   }
-
   close(listen_sock);
   vTaskDelete(NULL);
 }

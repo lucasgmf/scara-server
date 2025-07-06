@@ -842,14 +842,14 @@ void loop_scara_readings() {
 }
 
 void init_scara() {
-  /* wifi_initialization_func(); */
-  switch_initialization_task();
-  encoder_initialization_task();
-  motor_initialization_task();
+  wifi_initialization_func();
+  /* switch_initialization_task(); */
+  /* encoder_initialization_task(); */
+  /* motor_initialization_task(); */
   /* xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL); */
-  xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL);
+  /* xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL); */
   /* hx711_initialization_func(); */
 
-  calibration_initialization_task();
+  /* calibration_initialization_task(); */
   ESP_LOGI(TAG, "init_scara completed");
 }
