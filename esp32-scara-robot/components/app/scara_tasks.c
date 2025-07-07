@@ -72,10 +72,11 @@ void tcp_server_task(void *arg) {
         ESP_LOGI(TAG, "Received: %s", rx_buffer);
 
         int count = sscanf(
-            rx_buffer, "%f,%f,%f,%f,%f,%f,%f,%f,%d,%d",
+            rx_buffer, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%d,%d",
             &net_conf->user_input_data->d1, &net_conf->user_input_data->theta2,
             &net_conf->user_input_data->theta3,
-            &net_conf->user_input_data->theta4, &net_conf->user_input_data->x,
+            &net_conf->user_input_data->theta4,
+            &net_conf->user_input_data->theta5, &net_conf->user_input_data->x,
             &net_conf->user_input_data->y, &net_conf->user_input_data->z,
             &net_conf->user_input_data->w,
             &net_conf->user_input_data->dir_kinematics_on,
@@ -85,10 +86,11 @@ void tcp_server_task(void *arg) {
           ESP_LOGI(TAG, "Parsed values:");
           ESP_LOGI(
               TAG,
-              "Float values: %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f",
+              "Float values: %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f",
               net_conf->user_input_data->d1, net_conf->user_input_data->theta2,
               net_conf->user_input_data->theta3,
-              net_conf->user_input_data->theta4, net_conf->user_input_data->x,
+              net_conf->user_input_data->theta4,
+              net_conf->user_input_data->theta5, net_conf->user_input_data->x,
               net_conf->user_input_data->y, net_conf->user_input_data->z,
               net_conf->user_input_data->w);
           ESP_LOGI(

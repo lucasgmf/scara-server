@@ -173,23 +173,27 @@
                     </div>
                     <div class="form-group">
                         <label for="float4">Theta4:</label>
-                        <input type="number" id="float4" name="float4" step="0.01" value="0" min="-90" max="90">
+                        <input type="number" id="float4" name="float4" step="0.01" value="0" min="-180" max="180">
                     </div>
                     <div class="form-group">
-                        <label for="float5">Target 2:</label>
-                        <input type="number" id="float5" name="float5" step="1" value="0" min="-90" max="90">
+                        <label for="float5">Theta5:</label>
+                        <input type="number" id="float5" name="float5" step="0.01" value="0" min="-90" max="90">
                     </div>
                     <div class="form-group">
-                        <label for="float6">Value 6:</label>
-                        <input type="number" id="float6" name="float6" step="0.1" value="0.0" min="-100" max="100">
+                        <label for="float6">Target 2:</label>
+                        <input type="number" id="float6" name="float6" step="1" value="0" min="-90" max="90">
                     </div>
                     <div class="form-group">
                         <label for="float7">Value 7:</label>
-                        <input type="number" id="float7" name="float7" step="0.1" value="100.0" min="0" max="200">
+                        <input type="number" id="float7" name="float7" step="0.1" value="0.0" min="-100" max="100">
                     </div>
                     <div class="form-group">
                         <label for="float8">Value 8:</label>
-                        <input type="number" id="float8" name="float8" step="0.1" value="50.0" min="0" max="100">
+                        <input type="number" id="float8" name="float8" step="0.1" value="100.0" min="0" max="200">
+                    </div>
+                    <div class="form-group">
+                        <label for="float8">Value 9:</label>
+                        <input type="number" id="float9" name="float9" step="0.1" value="50.0" min="0" max="100">
                     </div>
                     
                     <button type="submit">Send to ESP32</button>
@@ -283,7 +287,8 @@
             float5: 0,
             float6: 0,
             float7: 0,
-            float8: 0
+            float8: 0,
+            float9: 0,
         };
         
         // Handle form submission

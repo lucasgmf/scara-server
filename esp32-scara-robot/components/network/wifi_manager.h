@@ -28,6 +28,7 @@ typedef struct {
   float theta2;
   float theta3;
   float theta4;
+  float theta5;
   int inv_kinematics_on;
   float x;
   float y;
