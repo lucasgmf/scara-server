@@ -96,22 +96,6 @@ void tcp_server_task(void *arg) {
               net_conf->user_input_data->dir_kinematics_on ? "true" : "false",
               net_conf->user_input_data->inv_kinematics_on ? "true" : "false");
 
-          // Store the parsed values in your data structure
-          // You'll need to update your rec_data structure to accommodate these
-          // values Example assignments (adjust based on your actual structure):
-          /*
-          net_conf->rec_data->float_val_1 = float_values[0];
-          net_conf->rec_data->float_val_2 = float_values[1];
-          net_conf->rec_data->float_val_3 = float_values[2];
-          net_conf->rec_data->float_val_4 = float_values[3];
-          net_conf->rec_data->float_val_5 = float_values[4];
-          net_conf->rec_data->float_val_6 = float_values[5];
-          net_conf->rec_data->float_val_7 = float_values[6];
-          net_conf->rec_data->float_val_8 = float_values[7];
-          net_conf->rec_data->bool_val_1 = (bool)bool_values[0];
-          net_conf->rec_data->bool_val_2 = (bool)bool_values[1];
-          */
-
           // Use parsed values as needed in your control logic
         } else {
           ESP_LOGW(TAG,

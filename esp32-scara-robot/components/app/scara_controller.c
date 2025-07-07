@@ -660,7 +660,8 @@ void calibration_initialization_task() {
     vTaskDelay(20);
   }
   motor_set_target_frequency(&motor_x, 0);
-  motor_move_steps(&motor_x, 6400 * 10 / 6 * 5, motor_x.pwm_vars->max_freq);
+  /* motor_move_steps(&motor_x, 6400 * 10 / 6 * 5, motor_x.pwm_vars->max_freq); */
+  motor_move_steps(&motor_x, 6600, motor_x.pwm_vars->max_freq); // 1 cm
 
   motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq / 4);
   /* motor_y.pwm_vars->target_freq_hz = motor_y.pwm_vars->max_freq / 4; */
@@ -706,14 +707,14 @@ void calibration_initialization_task() {
 
   // testing ratios
 
-  motor_y.control_vars->encoder_target_pos =
-      -90 * motor_y.control_vars->ref_encoder->encoder_resolution / 360 *
-      motor_y.control_vars->ref_encoder->gear_ratio;
-
-  motor_z.control_vars->encoder_target_pos =
-      90 * motor_z.control_vars->ref_encoder->encoder_resolution / 360 *
-          motor_z.control_vars->ref_encoder->gear_ratio +
-      motor_y.control_vars->encoder_target_pos;
+  /* motor_y.control_vars->encoder_target_pos = */
+  /*     -90 * motor_y.control_vars->ref_encoder->encoder_resolution / 360 * */
+  /*     motor_y.control_vars->ref_encoder->gear_ratio; */
+  /**/
+  /* motor_z.control_vars->encoder_target_pos = */
+  /*     90 * motor_z.control_vars->ref_encoder->encoder_resolution / 360 * */
+  /*         motor_z.control_vars->ref_encoder->gear_ratio + */
+  /*     motor_y.control_vars->encoder_target_pos; */
 
   ESP_LOGI("test", "changing target pos to %f",
            motor_z.control_vars->encoder_target_pos);
@@ -855,15 +856,32 @@ void loop_scara_readings() {
   return;
 }
 
+void e_o_que() {
+  while (1) {
+    motor_y.control_vars->encoder_target_pos =
+        client_input_data.theta2 *
+        motor_y.control_vars->ref_encoder->encoder_resolution / 360 *
+        motor_y.control_vars->ref_encoder->gear_ratio;
+
+    motor_z.control_vars->encoder_target_pos =
+        client_input_data.theta3 *
+            motor_z.control_vars->ref_encoder->encoder_resolution / 360 *
+            motor_z.control_vars->ref_encoder->gear_ratio +
+        motor_y.control_vars->encoder_target_pos;
+
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
+}
 void init_scara() {
   wifi_initialization_func();
-  /* switch_initialization_task(); */
-  /* encoder_initialization_task(); */
-  /* motor_initialization_task(); */
+  switch_initialization_task();
+  encoder_initialization_task();
+  motor_initialization_task();
   /* xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL); */
-  /* xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL); */
+  xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL);
+  xTaskCreate(e_o_que, "literalmente o nome", 4096, NULL, 5, NULL);
   /* hx711_initialization_func(); */
 
-  /* calibration_initialization_task(); */
+  calibration_initialization_task();
   ESP_LOGI(TAG, "init_scara completed");
 }
