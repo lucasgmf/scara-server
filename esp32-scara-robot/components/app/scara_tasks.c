@@ -71,28 +71,30 @@ void tcp_server_task(void *arg) {
         rx_buffer[len] = 0;
         ESP_LOGI(TAG, "Received: %s", rx_buffer);
 
-        // Variables to store the parsed values
-        float float_values[8];
-        int bool_values[2];
-
-        // Parse 8 floats and 2 booleans (integers 0/1)
-        int count =
-            sscanf(rx_buffer, "%f,%f,%f,%f,%f,%f,%f,%f,%d,%d", &float_values[0],
-                   &float_values[1], &float_values[2], &float_values[3],
-                   &float_values[4], &float_values[5], &float_values[6],
-                   &float_values[7], &bool_values[0], &bool_values[1]);
+        int count = sscanf(
+            rx_buffer, "%f,%f,%f,%f,%f,%f,%f,%f,%d,%d",
+            &net_conf->user_input_data->d1, &net_conf->user_input_data->theta2,
+            &net_conf->user_input_data->theta3,
+            &net_conf->user_input_data->theta4, &net_conf->user_input_data->x,
+            &net_conf->user_input_data->y, &net_conf->user_input_data->z,
+            &net_conf->user_input_data->w,
+            &net_conf->user_input_data->dir_kinematics_on,
+            &net_conf->user_input_data->inv_kinematics_on);
 
         if (count == 10) {
           ESP_LOGI(TAG, "Parsed values:");
           ESP_LOGI(
               TAG,
               "Float values: %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f",
-              float_values[0], float_values[1], float_values[2],
-              float_values[3], float_values[4], float_values[5],
-              float_values[6], float_values[7]);
-          ESP_LOGI(TAG, "Boolean values: %s, %s",
-                   bool_values[0] ? "true" : "false",
-                   bool_values[1] ? "true" : "false");
+              net_conf->user_input_data->d1, net_conf->user_input_data->theta2,
+              net_conf->user_input_data->theta3,
+              net_conf->user_input_data->theta4, net_conf->user_input_data->x,
+              net_conf->user_input_data->y, net_conf->user_input_data->z,
+              net_conf->user_input_data->w);
+          ESP_LOGI(
+              TAG, "Boolean values: %s, %s",
+              net_conf->user_input_data->dir_kinematics_on ? "true" : "false",
+              net_conf->user_input_data->inv_kinematics_on ? "true" : "false");
 
           // Store the parsed values in your data structure
           // You'll need to update your rec_data structure to accommodate these

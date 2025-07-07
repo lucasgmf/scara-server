@@ -23,6 +23,19 @@ wifi_rec_data wifi_received_data = {
     .target_position_2 = 2000,
 };
 
+user_input_data client_input_data = {
+    .d1 = 0,
+    .theta2 = 0,
+    .theta3 = 0,
+    .theta4 = 0,
+    .x = 0,
+    .y = 0,
+    .z = 0,
+    .w = 0,
+    .dir_kinematics_on = 0,
+    .inv_kinematics_on = 0,
+};
+
 network_configuration esp_net_conf = {
     .wifi_config = &wifi_config_a,
     .port = PORT,
@@ -31,6 +44,7 @@ network_configuration esp_net_conf = {
     .addr_str_size = ADDR_STR_SIZE,
     .rec_data = &wifi_received_data,
     .s_wifi_event_group = (EventGroupHandle_t)&wifi_received_data,
+    .user_input_data = &client_input_data,
 };
 
 void wifi_initialization_func() {

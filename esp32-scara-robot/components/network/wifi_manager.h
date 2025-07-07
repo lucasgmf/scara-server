@@ -21,6 +21,20 @@ typedef struct {
   int target_position_2;
 } wifi_rec_data;
 
+// TODO: change int to bool
+typedef struct {
+  int dir_kinematics_on;
+  float d1;
+  float theta2;
+  float theta3;
+  float theta4;
+  int inv_kinematics_on;
+  float x;
+  float y;
+  float z;
+  float w;
+} user_input_data;
+
 typedef struct {
   wifi_config_t *wifi_config;
   unsigned short port;
@@ -29,6 +43,7 @@ typedef struct {
   int addr_str_size;
   wifi_rec_data *rec_data;
   EventGroupHandle_t s_wifi_event_group;
+  user_input_data *user_input_data;
 } network_configuration;
 
 esp_err_t init_wifi(network_configuration *net_conf);
