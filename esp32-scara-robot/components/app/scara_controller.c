@@ -253,7 +253,7 @@ static encoder_t encoder_2 = {
     .current_reading = 0,
     .accumulated_steps = 0,
     .is_inverted = 1,
-    .gear_ratio = 2,
+    .gear_ratio = 1,
     .test_offset = 706,
     .is_calibrated = false,
     .switch_n = &switch_1,
@@ -465,7 +465,7 @@ motor_pwm_vars_t pwm_vars_a = {
     .max_accel = 1000,
     .current_freq_hz = 0,
     .target_freq_hz = 0,
-    .dir_is_reversed = false,
+    .dir_is_reversed = true,
 };
 
 motor_pwm_vars_t pwm_vars_b = {
@@ -497,13 +497,13 @@ pid_controller_t pid_motor_z = {
 };
 
 pid_controller_t pid_motor_a = {
-    .Kp = 0.1, // 1
+    .Kp = 0.5, // 1
     .Ki = 0.0, // 0.01
     .Kd = 0.0, // 0.2
 };
 
 pid_controller_t pid_motor_b = {
-    .Kp = 0.1, // 1
+    .Kp = 0.5, // 1
     .Ki = 0.0, // 0.01
     .Kd = 0.0, // 0.2
 };
@@ -538,6 +538,7 @@ motor_control_vars control_vars_a = {
     .pid = &pid_motor_a,
     /* .ref_switch = &switch_1, */
 };
+
 motor_control_vars control_vars_b = {
     .ref_encoder = &encoder_3,
     .encoder_target_pos = 0,
@@ -589,6 +590,7 @@ motor_t motor_a = {
     .control_vars = &control_vars_a,
     .is_inverted = false,
 };
+
 motor_t motor_b = {
     .label = MOTOR_B_LABEL,
     .id = MOTOR_B_ID,
@@ -644,6 +646,8 @@ void motor_initialization_task() {
 
   xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_y, 5, NULL);
   xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_z, 5, NULL);
+  xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_a, 5, NULL);
+  xTaskCreate(motor_control_task, "motor_ctrl", 4096, &motor_b, 5, NULL);
   return;
 }
 
@@ -660,7 +664,8 @@ void calibration_initialization_task() {
     vTaskDelay(20);
   }
   motor_set_target_frequency(&motor_x, 0);
-  /* motor_move_steps(&motor_x, 6400 * 10 / 6 * 5, motor_x.pwm_vars->max_freq); */
+  /* motor_move_steps(&motor_x, 6400 * 10 / 6 * 5, motor_x.pwm_vars->max_freq);
+   */
   motor_move_steps(&motor_x, 6600, motor_x.pwm_vars->max_freq); // 1 cm
 
   motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq / 4);
@@ -718,6 +723,10 @@ void calibration_initialization_task() {
 
   ESP_LOGI("test", "changing target pos to %f",
            motor_z.control_vars->encoder_target_pos);
+
+  encoder_zero_position(motor_a.control_vars->ref_encoder);
+  encoder_zero_position(motor_b.control_vars->ref_encoder);
+
   return;
 }
 
@@ -859,15 +868,20 @@ void loop_scara_readings() {
 void e_o_que() {
   while (1) {
     motor_y.control_vars->encoder_target_pos =
-        client_input_data.theta2 *
+        client_input_data.theta2 * -1 *
         motor_y.control_vars->ref_encoder->encoder_resolution / 360 *
         motor_y.control_vars->ref_encoder->gear_ratio;
 
     motor_z.control_vars->encoder_target_pos =
         client_input_data.theta3 *
             motor_z.control_vars->ref_encoder->encoder_resolution / 360 *
-            motor_z.control_vars->ref_encoder->gear_ratio +
+            motor_z.control_vars->ref_encoder->gear_ratio -
         motor_y.control_vars->encoder_target_pos;
+
+    motor_a.control_vars->encoder_target_pos =
+        client_input_data.theta4 *
+        motor_a.control_vars->ref_encoder->encoder_resolution / 360 *
+        motor_a.control_vars->ref_encoder->gear_ratio;
 
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
