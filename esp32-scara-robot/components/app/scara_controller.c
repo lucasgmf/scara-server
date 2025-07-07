@@ -883,6 +883,10 @@ void e_o_que() {
         motor_a.control_vars->ref_encoder->encoder_resolution / 360 *
         motor_a.control_vars->ref_encoder->gear_ratio;
 
+    motor_b.control_vars->encoder_target_pos =
+        client_input_data.theta5 *
+        motor_b.control_vars->ref_encoder->encoder_resolution / 360 *
+        motor_b.control_vars->ref_encoder->gear_ratio;
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
