@@ -38,7 +38,7 @@ void motor_stop_pwm(motor_t *motor) {
   // Force GPIO to LOW to eliminate noise
   gpio_set_level(motor->gpio_stp, 0);
 
-  ESP_LOGI(TAG, "PWM cleanly stopped, GPIO set to LOW");
+  /* ESP_LOGI(TAG, "PWM cleanly stopped, GPIO set to LOW"); */
 }
 
 void motor_delete_pwm(motor_t *motor) {
@@ -108,14 +108,14 @@ void motor_create_pwm(motor_t *motor) {
 
   // For initialization, don't create PWM if frequency is 0 or too low
   if (motor->pwm_vars->current_freq_hz <= 0.0f) {
-    ESP_LOGI(TAG, "PWM creation skipped for motor %d (freq = %.2f Hz)",
-             motor->id, motor->pwm_vars->current_freq_hz);
+    /* ESP_LOGI(TAG, "PWM creation skipped for motor %d (freq = %.2f Hz)", */
+    /*          motor->id, motor->pwm_vars->current_freq_hz); */
     return;
   }
 
   if (motor->pwm_vars->current_freq_hz < motor->pwm_vars->min_freq) {
-    ESP_LOGW(TAG, "Skipping PWM creation: freq = %.2f is too low",
-             motor->pwm_vars->current_freq_hz);
+    /* ESP_LOGW(TAG, "Skipping PWM creation: freq = %.2f is too low", */
+    /*          motor->pwm_vars->current_freq_hz); */
     return;
   }
 
@@ -232,8 +232,8 @@ void motor_create_pwm(motor_t *motor) {
     return;
   }
 
-  ESP_LOGI(TAG, "PWM created for motor %d at freq %.2f Hz (period %u ticks)",
-           motor->id, freq, period_ticks);
+  /* ESP_LOGI(TAG, "PWM created for motor %d at freq %.2f Hz (period %u ticks)", */
+  /*          motor->id, freq, period_ticks); */
 }
 
 esp_err_t motor_set_target_frequency(motor_t *motor, float target_freq_hz) {
@@ -279,7 +279,7 @@ esp_err_t motor_update_pwm_frequency_immediate(motor_t *motor,
     motor_stop_pwm(motor);
     motor_delete_pwm(motor);
     motor->pwm_vars->current_freq_hz = 0.0f;
-    ESP_LOGI(TAG, "PWM stopped and deleted for 0 Hz");
+    /* ESP_LOGI(TAG, "PWM stopped and deleted for 0 Hz"); */
     return ESP_OK;
   }
 
@@ -416,8 +416,8 @@ void motor_update_timer_cb(void *arg) {
     if (motor->pwm_vars->target_steps > 0 &&
         motor->pwm_vars->step_count >= motor->pwm_vars->target_steps) {
 
-      ESP_LOGI(TAG, "Motor %d reached target steps: %d (actual: %d)", motor->id,
-               motor->pwm_vars->target_steps, motor->pwm_vars->step_count);
+      /* ESP_LOGI(TAG, "Motor %d reached target steps: %d (actual: %d)", motor->id, */
+      /*          motor->pwm_vars->target_steps, motor->pwm_vars->step_count); */
 
       // IMMEDIATELY stop the motor
       motor->pwm_vars->target_freq_hz = 0;
@@ -561,7 +561,7 @@ void motor_update_timer_cb(void *arg) {
     motor_stop_pwm(motor);
     vTaskDelay(pdMS_TO_TICKS(1)); // Small delay for clean stop
     motor_delete_pwm(motor);
-    ESP_LOGI(TAG, "PWM stopped and deleted at 0 Hz");
+    /* ESP_LOGI(TAG, "PWM stopped and deleted at 0 Hz"); */
   }
 }
 
