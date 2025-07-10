@@ -24,7 +24,7 @@ wifi_rec_data wifi_received_data = {
 };
 
 user_input_data client_input_data = {
-    .d1 = 0,
+    .d1 = 1,
     .theta2 = 0,
     .theta3 = 0,
     .theta4 = 0,
@@ -675,31 +675,32 @@ void calibration_initialization_task() {
   motor_set_target_frequency(&motor_x, 0);
   /* motor_move_steps(&motor_x, 6400 * 10 / 6 * 5, motor_x.pwm_vars->max_freq);
    */
-  motor_move_steps(&motor_x, 6600, motor_x.pwm_vars->max_freq); // 1 cm
-
-  motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq / 4);
+  motor_set_current_position(&motor_x, 0); // Start at position 0
+  motor_move_to_position(&motor_x, 6600, motor_x.pwm_vars->max_freq);
+  /**/
+  /* motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq / 4); */
   /* motor_y.pwm_vars->target_freq_hz = motor_y.pwm_vars->max_freq / 4; */
-  while (!motor_y.control_vars->ref_switch->is_pressed) {
-    /* ESP_LOGI("calibration_initialization_task", "calibrating motor_y"); */
-    vTaskDelay(20);
-  }
-  motor_set_target_frequency(&motor_y, 0);
-  encoder_zero_position(motor_y.control_vars->ref_encoder);
-  motor_y.control_vars->encoder_target_pos = 0;
-
-  vTaskDelay(2000 / portTICK_PERIOD_MS);
-
-  while (!motor_z.control_vars->ref_switch->is_pressed) {
-    motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq / 4);
-    /* ESP_LOGI("calibration_initialization_task", "calibrating motor_z"); */
-    vTaskDelay(20);
-  }
-
-  ESP_LOGI("calibration_initialization_task", "finished motor_z cal");
-  motor_set_target_frequency(&motor_z, 0);
-  encoder_zero_position(motor_z.control_vars->ref_encoder);
-  motor_z.control_vars->encoder_target_pos = 0;
-  motor_y.control_vars->encoder_target_pos = 0;
+  /* while (!motor_y.control_vars->ref_switch->is_pressed) { */
+  /* ESP_LOGI("calibration_initialization_task", "calibrating motor_y"); */
+  /*   vTaskDelay(20); */
+  /* } */
+  /* motor_set_target_frequency(&motor_y, 0); */
+  /* encoder_zero_position(motor_y.control_vars->ref_encoder); */
+  /* motor_y.control_vars->encoder_target_pos = 0; */
+  /**/
+  /* vTaskDelay(2000 / portTICK_PERIOD_MS); */
+  /**/
+  /* while (!motor_z.control_vars->ref_switch->is_pressed) { */
+  /*   motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq / 4); */
+  /* ESP_LOGI("calibration_initialization_task", "calibrating motor_z"); */
+  /*   vTaskDelay(20); */
+  /* } */
+  /**/
+  /* ESP_LOGI("calibration_initialization_task", "finished motor_z cal"); */
+  /* motor_set_target_frequency(&motor_z, 0); */
+  /* encoder_zero_position(motor_z.control_vars->ref_encoder); */
+  /* motor_z.control_vars->encoder_target_pos = 0; */
+  /* motor_y.control_vars->encoder_target_pos = 0; */
 
   /* motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq); */
   /* while (!motor_y.control_vars->ref_switch->is_pressed) { */
@@ -730,11 +731,8 @@ void calibration_initialization_task() {
   /*         motor_z.control_vars->ref_encoder->gear_ratio + */
   /*     motor_y.control_vars->encoder_target_pos; */
 
-  ESP_LOGI("test", "changing target pos to %f",
-           motor_z.control_vars->encoder_target_pos);
-
-  encoder_zero_position(motor_a.control_vars->ref_encoder);
-  encoder_zero_position(motor_b.control_vars->ref_encoder);
+  /* ESP_LOGI("test", "changing target pos to %f", */
+  /*          motor_z.control_vars->encoder_target_pos); */
 
   return;
 }
@@ -875,7 +873,13 @@ void loop_scara_readings() {
 }
 
 void e_o_que() {
+  vTaskDelay(pdMS_TO_TICKS(5000));
+
   while (1) {
+
+    motor_move_to_position(&motor_x, 6600 * client_input_data.d1,
+                           motor_x.pwm_vars->max_freq);
+
     motor_y.control_vars->encoder_target_pos =
         client_input_data.theta2 * -1 *
         motor_y.control_vars->ref_encoder->encoder_resolution / 360 *
@@ -997,9 +1001,8 @@ void init_scara() {
   /* xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL); */
   /* xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL); */
   xTaskCreate(loop_scara_readings_2, "testreadings", 4096, NULL, 5, NULL);
-  xTaskCreate(e_o_que, "literalmente o nome", 4096, NULL, 5, NULL);
   /* hx711_initialization_func(); */
-
   calibration_initialization_task();
+  xTaskCreate(e_o_que, "literalmente o nome", 4096, NULL, 5, NULL);
   ESP_LOGI(TAG, "init_scara completed");
 }
