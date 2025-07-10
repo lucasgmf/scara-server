@@ -36,6 +36,8 @@ user_input_data client_input_data = {
     .inv_kinematics_on = 0,
 };
 
+system_output_data system_output_data_values = {};
+
 network_configuration esp_net_conf = {
     .wifi_config = &wifi_config_a,
     .port = PORT,
@@ -45,6 +47,7 @@ network_configuration esp_net_conf = {
     .rec_data = &wifi_received_data,
     .s_wifi_event_group = (EventGroupHandle_t)&wifi_received_data,
     .user_input_data = &client_input_data,
+    .system_output_data = &system_output_data_values,
 };
 
 void wifi_initialization_func() {
@@ -658,9 +661,15 @@ void calibration_initialization_task() {
   gpio_set_level(motor_a.gpio_dir, false);
   gpio_set_level(motor_b.gpio_dir, false);
 
+  encoder_zero_position(motor_a.control_vars->ref_encoder);
+  encoder_zero_position(motor_b.control_vars->ref_encoder);
+
+  motor_a.control_vars->encoder_target_pos = 0;
+  motor_b.control_vars->encoder_target_pos = 0;
+
   motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq);
   while (!motor_x.control_vars->ref_switch->is_pressed) {
-    ESP_LOGI("calibration_initialization_task", "calibrating motor_x");
+    /* ESP_LOGI("calibration_initialization_task", "calibrating motor_x"); */
     vTaskDelay(20);
   }
   motor_set_target_frequency(&motor_x, 0);
@@ -671,7 +680,7 @@ void calibration_initialization_task() {
   motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq / 4);
   /* motor_y.pwm_vars->target_freq_hz = motor_y.pwm_vars->max_freq / 4; */
   while (!motor_y.control_vars->ref_switch->is_pressed) {
-    ESP_LOGI("calibration_initialization_task", "calibrating motor_y");
+    /* ESP_LOGI("calibration_initialization_task", "calibrating motor_y"); */
     vTaskDelay(20);
   }
   motor_set_target_frequency(&motor_y, 0);
@@ -682,7 +691,7 @@ void calibration_initialization_task() {
 
   while (!motor_z.control_vars->ref_switch->is_pressed) {
     motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq / 4);
-    ESP_LOGI("calibration_initialization_task", "calibrating motor_z");
+    /* ESP_LOGI("calibration_initialization_task", "calibrating motor_z"); */
     vTaskDelay(20);
   }
 
@@ -890,13 +899,104 @@ void e_o_que() {
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
+
+// dimenstions in meters
+#define A1_DIM 9.8 / 2 / 100
+#define A2_DIM 10 / 100
+#define A3_DIM 10.25 / 100
+
+#define D1_MIN_VAL 0
+#define D1_MAX_VAL 45 / 100
+#define D3_VAL 5.9 / 100
+#define D4_VAL 15 / 100
+
+// angles in degrees
+#define THETA2_MIN_VAL -100
+#define THETA2_MAX_VAL 100
+#define THETA3_MIN_VAL -135
+#define THETA3_MAX_VAL 135
+#define THETA4_MIN_VAL -180
+#define THETA4_MAX_VAL 180
+
+/* #define THETA3_4_SUM_MAX_VAL */
+
+void calculate_direct_kinematics(system_output_data *data) {
+  data->x = A3_DIM * cos(data->theta2 + data->theta3) +
+            (float)A2_DIM * cos(data->theta2) + A1_DIM;
+
+  data->y = A3_DIM * (sin(data->theta2 + data->theta3)) +
+            (float)A2_DIM * sin(data->theta2);
+
+  data->z = data->d1 - D3_VAL + (float)D4_VAL;
+}
+
+void update_monitoring_data(system_output_data *system_output_data_t) {
+  system_output_data_t->horizontal_load = hx711_0.raw_read;
+  system_output_data_t->vertical_load = hx711_1.raw_read;
+
+  system_output_data_t->encoder0 = encoder_0.accumulated_steps;
+  system_output_data_t->encoder1 = encoder_1.accumulated_steps;
+  system_output_data_t->encoder2 = encoder_2.accumulated_steps;
+  system_output_data_t->encoder3 = encoder_3.accumulated_steps;
+
+  system_output_data_t->switch0 = switch_0.is_pressed;
+  system_output_data_t->switch1 = switch_1.is_pressed;
+
+  system_output_data_t->d1 = 0;
+
+  system_output_data_t->theta2 = -1 * encoder_get_angle_degrees(&encoder_0);
+
+  system_output_data_t->theta3 =
+      encoder_get_angle_degrees(&encoder_1) - system_output_data_t->theta2;
+
+  system_output_data_t->theta4 = encoder_get_angle_degrees(&encoder_2);
+
+  system_output_data_t->theta5 = encoder_get_angle_degrees(&encoder_3);
+
+  // update x, y, z with direct kinematics
+  calculate_direct_kinematics(system_output_data_t);
+
+  system_output_data_t->w =
+      system_output_data_t->theta5; // TODO: maybe change this
+}
+
+void read_system_output_data(const system_output_data *data) {
+  ESP_LOGI(TAG, "horizontal_load: %.2f", data->horizontal_load);
+  ESP_LOGI(TAG, "vertical_load: %.2f", data->vertical_load);
+  ESP_LOGI(TAG, "encoder0: %.2f", data->encoder0);
+  ESP_LOGI(TAG, "encoder1: %.2f", data->encoder1);
+  ESP_LOGI(TAG, "encoder2: %.2f", data->encoder2);
+  ESP_LOGI(TAG, "encoder3: %.2f", data->encoder3);
+  ESP_LOGI(TAG, "switch0: %d", data->switch0);
+  ESP_LOGI(TAG, "switch1: %d", data->switch1);
+  ESP_LOGI(TAG, "x: %.2f", data->x);
+  ESP_LOGI(TAG, "y: %.2f", data->y);
+  ESP_LOGI(TAG, "z: %.2f", data->z);
+  ESP_LOGI(TAG, "w: %.2f", data->w);
+  ESP_LOGI(TAG, "d1: %.2f", data->d1);
+  ESP_LOGI(TAG, "theta2: %.2f", data->theta2);
+  ESP_LOGI(TAG, "theta3: %.2f", data->theta3);
+  ESP_LOGI(TAG, "theta4: %.2f", data->theta4);
+  ESP_LOGI(TAG, "theta5: %.2f", data->theta5);
+  ESP_LOGI("", "");
+}
+
+void loop_scara_readings_2() {
+  while (1) {
+    update_monitoring_data(&system_output_data_values);
+    read_system_output_data(&system_output_data_values);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
+}
+
 void init_scara() {
   wifi_initialization_func();
   switch_initialization_task();
   encoder_initialization_task();
   motor_initialization_task();
   /* xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL); */
-  xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL);
+  /* xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL); */
+  xTaskCreate(loop_scara_readings_2, "testreadings", 4096, NULL, 5, NULL);
   xTaskCreate(e_o_que, "literalmente o nome", 4096, NULL, 5, NULL);
   /* hx711_initialization_func(); */
 
