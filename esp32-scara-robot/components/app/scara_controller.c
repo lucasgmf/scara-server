@@ -677,30 +677,30 @@ void calibration_initialization_task() {
    */
   motor_set_current_position(&motor_x, 0); // Start at position 0
   motor_move_to_position(&motor_x, 6600, motor_x.pwm_vars->max_freq);
-  /**/
-  /* motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq / 4); */
-  /* motor_y.pwm_vars->target_freq_hz = motor_y.pwm_vars->max_freq / 4; */
-  /* while (!motor_y.control_vars->ref_switch->is_pressed) { */
-  /* ESP_LOGI("calibration_initialization_task", "calibrating motor_y"); */
-  /*   vTaskDelay(20); */
-  /* } */
-  /* motor_set_target_frequency(&motor_y, 0); */
-  /* encoder_zero_position(motor_y.control_vars->ref_encoder); */
-  /* motor_y.control_vars->encoder_target_pos = 0; */
-  /**/
-  /* vTaskDelay(2000 / portTICK_PERIOD_MS); */
-  /**/
-  /* while (!motor_z.control_vars->ref_switch->is_pressed) { */
-  /*   motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq / 4); */
-  /* ESP_LOGI("calibration_initialization_task", "calibrating motor_z"); */
-  /*   vTaskDelay(20); */
-  /* } */
-  /**/
-  /* ESP_LOGI("calibration_initialization_task", "finished motor_z cal"); */
-  /* motor_set_target_frequency(&motor_z, 0); */
-  /* encoder_zero_position(motor_z.control_vars->ref_encoder); */
-  /* motor_z.control_vars->encoder_target_pos = 0; */
-  /* motor_y.control_vars->encoder_target_pos = 0; */
+
+  motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq / 4);
+  motor_y.pwm_vars->target_freq_hz = motor_y.pwm_vars->max_freq / 4;
+  while (!motor_y.control_vars->ref_switch->is_pressed) {
+    ESP_LOGI("calibration_initialization_task", "calibrating motor_y");
+    vTaskDelay(20);
+  }
+  motor_set_target_frequency(&motor_y, 0);
+  encoder_zero_position(motor_y.control_vars->ref_encoder);
+  motor_y.control_vars->encoder_target_pos = 0;
+
+  vTaskDelay(2000 / portTICK_PERIOD_MS);
+
+  while (!motor_z.control_vars->ref_switch->is_pressed) {
+    motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq / 4);
+    ESP_LOGI("calibration_initialization_task", "calibrating motor_z");
+    vTaskDelay(20);
+  }
+
+  ESP_LOGI("calibration_initialization_task", "finished motor_z cal");
+  motor_set_target_frequency(&motor_z, 0);
+  encoder_zero_position(motor_z.control_vars->ref_encoder);
+  motor_z.control_vars->encoder_target_pos = 0;
+  motor_y.control_vars->encoder_target_pos = 0;
 
   /* motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq); */
   /* while (!motor_y.control_vars->ref_switch->is_pressed) { */
@@ -719,20 +719,6 @@ void calibration_initialization_task() {
   /* } */
   // set new value
   ESP_LOGW("calibration", "\n\n\nAll calibrations done!\n\n\n");
-
-  // testing ratios
-
-  /* motor_y.control_vars->encoder_target_pos = */
-  /*     -90 * motor_y.control_vars->ref_encoder->encoder_resolution / 360 * */
-  /*     motor_y.control_vars->ref_encoder->gear_ratio; */
-  /**/
-  /* motor_z.control_vars->encoder_target_pos = */
-  /*     90 * motor_z.control_vars->ref_encoder->encoder_resolution / 360 * */
-  /*         motor_z.control_vars->ref_encoder->gear_ratio + */
-  /*     motor_y.control_vars->encoder_target_pos; */
-
-  /* ESP_LOGI("test", "changing target pos to %f", */
-  /*          motor_z.control_vars->encoder_target_pos); */
 
   return;
 }
