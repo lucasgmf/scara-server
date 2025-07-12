@@ -15,7 +15,7 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 # Global variables for connection management
 esp32_socket = None
 esp32_connected = False
-latest_esp32_data = {}
+latest_esp32_data = {'connected': False}
 connection_lock = threading.Lock()
 
 class ESP32Connection:
@@ -28,8 +28,11 @@ class ESP32Connection:
     def connect(self):
         """Establish connection to ESP32"""
         try:
+            if self.socket:
+                self.socket.close()
+            
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket.settimeout(5)
+            self.socket.settimeout(10)  # Increased timeout
             self.socket.connect((ESP32_IP, ESP32_PORT))
             self.connected = True
             self.should_stop = False
@@ -39,12 +42,23 @@ class ESP32Connection:
             self.receive_thread.start()
             
             print(f"[✓] Connected to ESP32 at {ESP32_IP}:{ESP32_PORT}")
+            
+            # Notify all clients about connection status
+            socketio.emit('connection_status', {'connected': True})
+            
             return True
         except Exception as e:
             print(f"[✗] Connection failed: {e}")
             self.connected = False
             if self.socket:
-                self.socket.close()
+                try:
+                    self.socket.close()
+                except:
+                    pass
+                self.socket = None
+            
+            # Notify all clients about connection status
+            socketio.emit('connection_status', {'connected': False})
             return False
     
     def disconnect(self):
@@ -56,11 +70,16 @@ class ESP32Connection:
                 self.socket.close()
             except:
                 pass
+            self.socket = None
         print("[!] Disconnected from ESP32")
+        
+        # Notify all clients about disconnection
+        socketio.emit('connection_status', {'connected': False})
     
     def send_data(self, data):
         """Send data to ESP32"""
         if not self.connected or not self.socket:
+            print("[!] Not connected to ESP32")
             return False
         
         try:
@@ -81,10 +100,13 @@ class ESP32Connection:
             try:
                 if not self.socket:
                     break
-                    
+                
+                # Set socket timeout for receiving
+                self.socket.settimeout(1.0)
                 data = self.socket.recv(1024).decode()
+                
                 if not data:
-                    print("[!] ESP32 disconnected")
+                    print("[!] ESP32 disconnected - no data received")
                     break
                 
                 buffer += data
@@ -96,6 +118,8 @@ class ESP32Connection:
                     
                     if not line:
                         continue
+                    
+                    print(f"[DEBUG] Received raw line: {line}")
                     
                     # Parse CSV data
                     values = line.split(',')
@@ -143,20 +167,24 @@ class ESP32Connection:
                                 latest_esp32_data = parsed_data
                             
                             # Emit to all connected web clients
+                            print(f"[DEBUG] Emitting monitor_update to clients")
                             socketio.emit('monitor_update', parsed_data)
                             
                             print(f"[✓] Received from ESP32: Load H={parsed_data['horizontal_load']:.2f}, V={parsed_data['vertical_load']:.2f}")
-                        except ValueError as e:
+                        except (ValueError, IndexError) as e:
                             print(f"[!] Error parsing values: {e}")
+                            print(f"[!] Raw data: {line}")
                     else:
                         print(f"[!] Invalid data format (expected 17 values, got {len(values)}): {line}")
                         
             except socket.timeout:
+                # This is normal - just continue
                 continue
             except Exception as e:
                 print(f"[✗] Receive error: {e}")
                 break
         
+        print("[!] Receive thread ending")
         self.disconnect()
 
 # Global ESP32 connection instance
@@ -165,6 +193,7 @@ esp32_conn = ESP32Connection()
 def ensure_connection():
     """Ensure ESP32 connection is active"""
     if not esp32_conn.connected:
+        print("[!] Attempting to reconnect to ESP32...")
         return esp32_conn.connect()
     return True
 
@@ -198,6 +227,8 @@ def receive_data():
         
         # Format: float1,float2,...,float9,bool1,bool2
         data = ",".join(floats) + f",{int(bool1)},{int(bool2)}\n"
+        print(f"[DEBUG] Sending data to ESP32: {data.strip()}")
+        
         success = esp32_conn.send_data(data)
         
         if success:
@@ -205,6 +236,7 @@ def receive_data():
         else:
             return "Failed to send data to ESP32.", 500
     except Exception as e:
+        print(f"[ERROR] Server error in receive_data: {e}")
         return f"Server error: {e}", 500
 
 @app.route("/api/esp32_data", methods=["GET"])
@@ -242,7 +274,8 @@ def handle_connect():
     
     # Send latest data if available
     with connection_lock:
-        if latest_esp32_data:
+        if latest_esp32_data and 'connected' in latest_esp32_data:
+            print(f"[DEBUG] Sending latest data to new client: {latest_esp32_data.get('connected', False)}")
             emit('monitor_update', latest_esp32_data)
 
 @socketio.on('disconnect')
@@ -253,6 +286,7 @@ def handle_disconnect():
 @socketio.on('request_data')
 def handle_request_data():
     """Handle request for current ESP32 data"""
+    print("[DEBUG] Client requested current data")
     with connection_lock:
         if latest_esp32_data:
             emit('monitor_update', latest_esp32_data)
@@ -266,10 +300,23 @@ def startup_connection():
     else:
         print("[!] Initial connection to ESP32 failed - will retry on first request")
 
+# Periodic connection check
+def connection_monitor():
+    """Monitor connection status and attempt reconnection"""
+    while True:
+        time.sleep(30)  # Check every 30 seconds
+        if not esp32_conn.connected:
+            print("[!] ESP32 disconnected, attempting reconnection...")
+            esp32_conn.connect()
+
 if __name__ == "__main__":
     # Start connection in background
     startup_thread = threading.Thread(target=startup_connection, daemon=True)
     startup_thread.start()
+    
+    # Start connection monitor
+    monitor_thread = threading.Thread(target=connection_monitor, daemon=True)
+    monitor_thread.start()
     
     # Run Flask app with SocketIO
     socketio.run(app, host="0.0.0.0", port=5000, debug=True, allow_unsafe_werkzeug=True)
