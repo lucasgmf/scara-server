@@ -180,20 +180,20 @@
                         <input type="number" id="float5" name="float5" step="0.01" value="0" min="-90" max="90">
                     </div>
                     <div class="form-group">
-                        <label for="float6">Target 2:</label>
-                        <input type="number" id="float6" name="float6" step="1" value="0" min="-90" max="90">
+                        <label for="float6">X:</label>
+                        <input type="number" id="float6" name="float6" step="0.1" value="0" min="-100" max="100">
                     </div>
                     <div class="form-group">
-                        <label for="float7">Value 7:</label>
+                        <label for="float7">Y:</label>
                         <input type="number" id="float7" name="float7" step="0.1" value="0.0" min="-100" max="100">
                     </div>
                     <div class="form-group">
-                        <label for="float8">Value 8:</label>
-                        <input type="number" id="float8" name="float8" step="0.1" value="100.0" min="0" max="200">
+                        <label for="float8">Z:</label>
+                        <input type="number" id="float8" name="float8" step="0.1" value="0.0" min="-100" max="100">
                     </div>
                     <div class="form-group">
-                        <label for="float8">Value 9:</label>
-                        <input type="number" id="float9" name="float9" step="0.1" value="50.0" min="0" max="100">
+                        <label for="float9">W:</label>
+                        <input type="number" id="float9" name="float9" step="0.1" value="0.0" min="-100" max="100">
                     </div>
                     
                     <button type="submit">Send to ESP32</button>
@@ -214,35 +214,39 @@
             <h3>Float Values</h3>
             <div class="monitor-grid" id="floatValues">
                 <div class="monitor-item">
-                    <label>Kp</label>
+                    <label>Horizontal Load</label>
                     <div class="value">--</div>
                 </div>
                 <div class="monitor-item">
-                    <label>Ki</label>
+                    <label>Vertical Load</label>
                     <div class="value">--</div>
                 </div>
                 <div class="monitor-item">
-                    <label>Kd</label>
+                    <label>Encoder 0</label>
                     <div class="value">--</div>
                 </div>
                 <div class="monitor-item">
-                    <label>Target 1</label>
+                    <label>Encoder 1</label>
                     <div class="value">--</div>
                 </div>
                 <div class="monitor-item">
-                    <label>Target 2</label>
+                    <label>Encoder 2</label>
                     <div class="value">--</div>
                 </div>
                 <div class="monitor-item">
-                    <label>Value 6</label>
+                    <label>Encoder 3</label>
                     <div class="value">--</div>
                 </div>
                 <div class="monitor-item">
-                    <label>Value 7</label>
+                    <label>X Position</label>
                     <div class="value">--</div>
                 </div>
                 <div class="monitor-item">
-                    <label>Value 8</label>
+                    <label>Y Position</label>
+                    <div class="value">--</div>
+                </div>
+                <div class="monitor-item">
+                    <label>Z Position</label>
                     <div class="value">--</div>
                 </div>
             </div>
@@ -250,14 +254,14 @@
             <h3>Boolean Values</h3>
             <div class="monitor-grid" id="booleanValues">
                 <div class="monitor-item">
-                    <label>Feature 1</label>
+                    <label>Switch 0</label>
                     <div class="value">
                         <span class="boolean-indicator boolean-false"></span>
                         False
                     </div>
                 </div>
                 <div class="monitor-item">
-                    <label>Feature 2</label>
+                    <label>Switch 1</label>
                     <div class="value">
                         <span class="boolean-indicator boolean-false"></span>
                         False
@@ -301,9 +305,14 @@
             formData.append("bool1", document.getElementById("bool1").checked ? "true" : "false");
             formData.append("bool2", document.getElementById("bool2").checked ? "true" : "false");
             
-            // Add float values
-            for (let i = 1; i <= 8; i++) {
-                formData.append(`float${i}`, document.getElementById(`float${i}`).value);
+            // Add float values - FIXED: Now includes all 9 floats
+            for (let i = 1; i <= 9; i++) {
+                const element = document.getElementById(`float${i}`);
+                if (element) {
+                    formData.append(`float${i}`, element.value);
+                } else {
+                    console.error(`Element float${i} not found`);
+                }
             }
             
             try {
@@ -313,7 +322,11 @@
                 });
                 
                 const result = await response.text();
-                showStatus(result, 'success');
+                if (response.ok) {
+                    showStatus(result, 'success');
+                } else {
+                    showStatus(result, 'error');
+                }
             } catch (error) {
                 showStatus('Error: ' + error.message, 'error');
             }
@@ -334,10 +347,12 @@
         function resetToDefaults() {
             for (const [id, value] of Object.entries(defaultValues)) {
                 const element = document.getElementById(id);
-                if (element.type === 'checkbox') {
-                    element.checked = value;
-                } else {
-                    element.value = value;
+                if (element) {
+                    if (element.type === 'checkbox') {
+                        element.checked = value;
+                    } else {
+                        element.value = value;
+                    }
                 }
             }
         }
@@ -379,8 +394,8 @@
                 'Last Update: ' + new Date(data.timestamp * 1000).toLocaleTimeString();
             
             // Update float values
-            if (data.floats && data.floats.length >= 8) {
-                const floatLabels = ['Kp', 'Ki', 'Kd', 'Target 1', 'Target 2', 'Value 6', 'Value 7', 'Value 8'];
+            if (data.floats && data.floats.length >= 9) {
+                const floatLabels = ['Horizontal Load', 'Vertical Load', 'Encoder 0', 'Encoder 1', 'Encoder 2', 'Encoder 3', 'X Position', 'Y Position', 'Z Position'];
                 const floatContainer = document.getElementById('floatValues');
                 floatContainer.innerHTML = '';
                 data.floats.forEach((value, index) => {
@@ -396,7 +411,7 @@
             
             // Update boolean values
             if (data.booleans && data.booleans.length >= 2) {
-                const boolLabels = ['Feature 1', 'Feature 2'];
+                const boolLabels = ['Switch 0', 'Switch 1'];
                 const boolContainer = document.getElementById('booleanValues');
                 boolContainer.innerHTML = '';
                 data.booleans.forEach((value, index) => {
