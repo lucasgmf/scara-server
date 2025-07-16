@@ -2,11 +2,18 @@ import socket
 import threading
 import time
 import json
+import sys
 from flask import Flask, request, render_template, jsonify
 from flask_socketio import SocketIO, emit
 
-# ESP32 Configuration
-ESP32_IP = "192.168.165.148"
+# ESP32 Configuration - Get from command line arguments
+if len(sys.argv) > 1:
+    ESP32_IP = sys.argv[1]
+else:
+    print("Error: No IP address provided")
+    print("This script should be called with an IP address argument")
+    sys.exit(1)
+
 ESP32_PORT = 42424
 
 # Flask App Setup
