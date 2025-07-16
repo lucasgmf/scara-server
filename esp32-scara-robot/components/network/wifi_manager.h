@@ -1,6 +1,7 @@
 #ifndef WIFI_MANAGER_H
 #define WIFI_MANAGER_H
 
+#include "esp_eap_client.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_netif.h"
@@ -69,5 +70,6 @@ typedef struct {
 } network_configuration;
 
 esp_err_t init_wifi(network_configuration *net_conf);
+esp_err_t configure_enterprise_wifi(wifi_config_t *wifi_config);
 
 #endif // WIFI_MANAGER_H
