@@ -34,6 +34,9 @@ typedef struct {
 
   int target_steps;
   bool step_counting_enabled;
+
+  int current_position; // Current position in steps
+  int target_position;  // Target position
 } motor_pwm_vars_t;
 
 #include "encoder.h"
@@ -74,4 +77,8 @@ esp_err_t motor_set_target_steps(motor_t *motor, int target_steps);
 int motor_get_step_count(motor_t *motor);
 esp_err_t motor_move_steps(motor_t *motor, int steps, float frequency);
 
+void motor_update_current_position(motor_t *motor);
+esp_err_t motor_set_current_position(motor_t *motor, int position);
+esp_err_t motor_move_to_position(motor_t *motor, int target_position,
+                                 float frequency);
 #endif // MOTOR_H

@@ -38,7 +38,7 @@ void motor_stop_pwm(motor_t *motor) {
   // Force GPIO to LOW to eliminate noise
   gpio_set_level(motor->gpio_stp, 0);
 
-  ESP_LOGI(TAG, "PWM cleanly stopped, GPIO set to LOW");
+  /* ESP_LOGI(TAG, "PWM cleanly stopped, GPIO set to LOW"); */
 }
 
 void motor_delete_pwm(motor_t *motor) {
@@ -108,14 +108,14 @@ void motor_create_pwm(motor_t *motor) {
 
   // For initialization, don't create PWM if frequency is 0 or too low
   if (motor->pwm_vars->current_freq_hz <= 0.0f) {
-    ESP_LOGI(TAG, "PWM creation skipped for motor %d (freq = %.2f Hz)",
-             motor->id, motor->pwm_vars->current_freq_hz);
+    /* ESP_LOGI(TAG, "PWM creation skipped for motor %d (freq = %.2f Hz)", */
+    /*          motor->id, motor->pwm_vars->current_freq_hz); */
     return;
   }
 
   if (motor->pwm_vars->current_freq_hz < motor->pwm_vars->min_freq) {
-    ESP_LOGW(TAG, "Skipping PWM creation: freq = %.2f is too low",
-             motor->pwm_vars->current_freq_hz);
+    /* ESP_LOGW(TAG, "Skipping PWM creation: freq = %.2f is too low", */
+    /*          motor->pwm_vars->current_freq_hz); */
     return;
   }
 
@@ -232,8 +232,9 @@ void motor_create_pwm(motor_t *motor) {
     return;
   }
 
-  ESP_LOGI(TAG, "PWM created for motor %d at freq %.2f Hz (period %u ticks)",
-           motor->id, freq, period_ticks);
+  /* ESP_LOGI(TAG, "PWM created for motor %d at freq %.2f Hz (period %u ticks)",
+   */
+  /*          motor->id, freq, period_ticks); */
 }
 
 esp_err_t motor_set_target_frequency(motor_t *motor, float target_freq_hz) {
@@ -279,7 +280,7 @@ esp_err_t motor_update_pwm_frequency_immediate(motor_t *motor,
     motor_stop_pwm(motor);
     motor_delete_pwm(motor);
     motor->pwm_vars->current_freq_hz = 0.0f;
-    ESP_LOGI(TAG, "PWM stopped and deleted for 0 Hz");
+    /* ESP_LOGI(TAG, "PWM stopped and deleted for 0 Hz"); */
     return ESP_OK;
   }
 
@@ -402,6 +403,8 @@ void motor_update_timer_cb(void *arg) {
     float steps_this_interval_f = current_freq * dt;
     uint32_t steps_this_interval = (uint32_t)steps_this_interval_f;
 
+    motor_update_current_position(motor);
+
     // Add fractional part tracking for better accuracy
     static float fractional_steps = 0.0f;
     fractional_steps += steps_this_interval_f - steps_this_interval;
@@ -416,8 +419,10 @@ void motor_update_timer_cb(void *arg) {
     if (motor->pwm_vars->target_steps > 0 &&
         motor->pwm_vars->step_count >= motor->pwm_vars->target_steps) {
 
-      ESP_LOGI(TAG, "Motor %d reached target steps: %d (actual: %d)", motor->id,
-               motor->pwm_vars->target_steps, motor->pwm_vars->step_count);
+      /* ESP_LOGI(TAG, "Motor %d reached target steps: %d (actual: %d)",
+       * motor->id, */
+      /*          motor->pwm_vars->target_steps, motor->pwm_vars->step_count);
+       */
 
       // IMMEDIATELY stop the motor
       motor->pwm_vars->target_freq_hz = 0;
@@ -561,7 +566,7 @@ void motor_update_timer_cb(void *arg) {
     motor_stop_pwm(motor);
     vTaskDelay(pdMS_TO_TICKS(1)); // Small delay for clean stop
     motor_delete_pwm(motor);
-    ESP_LOGI(TAG, "PWM stopped and deleted at 0 Hz");
+    /* ESP_LOGI(TAG, "PWM stopped and deleted at 0 Hz"); */
   }
 }
 
@@ -784,4 +789,67 @@ esp_err_t motor_move_steps(motor_t *motor, int steps, float frequency) {
 
   // Start movement
   return motor_set_target_frequency(motor, frequency);
+}
+
+esp_err_t motor_move_to_position(motor_t *motor, int target_position,
+                                 float frequency) {
+  if (motor == NULL)
+    return ESP_ERR_INVALID_ARG;
+
+  // Calculate steps needed to reach target position
+  int current_position =
+      motor->pwm_vars
+          ->current_position; // You need to add this to your motor struct
+  int steps_to_move = target_position - current_position;
+
+  ESP_LOGI(TAG, "Motor %d: Moving from position %d to %d (%d steps)", motor->id,
+           current_position, target_position, steps_to_move);
+
+  // If we're already at the target position, no need to move
+  if (steps_to_move == 0) {
+    ESP_LOGI(TAG, "Motor %d already at target position %d", motor->id,
+             target_position);
+    return ESP_OK;
+  }
+
+  // Update target position before moving
+  motor->pwm_vars->target_position = target_position;
+
+  // Use the existing motor_move_steps function
+  esp_err_t result = motor_move_steps(motor, steps_to_move, frequency);
+
+  if (result == ESP_OK) {
+    // Update current position after successful move command
+    // Note: The actual position will be updated when the move completes
+    ESP_LOGI(TAG, "Motor %d move command sent successfully", motor->id);
+  }
+
+  return result;
+}
+
+// You'll also need a function to update the current position when moves
+// complete
+void motor_update_current_position(motor_t *motor) {
+  if (motor == NULL)
+    return;
+
+  // This should be called when a move completes
+  // You might want to call this from your timer callback when target steps are
+  // reached
+  if (motor->pwm_vars->target_position != motor->pwm_vars->current_position) {
+    motor->pwm_vars->current_position = motor->pwm_vars->target_position;
+    ESP_LOGI(TAG, "Motor %d position updated to %d", motor->id,
+             motor->pwm_vars->current_position);
+  }
+}
+
+// Add this to your motor initialization
+esp_err_t motor_set_current_position(motor_t *motor, int position) {
+  if (motor == NULL)
+    return ESP_ERR_INVALID_ARG;
+
+  motor->pwm_vars->current_position = position;
+  motor->pwm_vars->target_position = position;
+  ESP_LOGI(TAG, "Motor %d current position set to %d", motor->id, position);
+  return ESP_OK;
 }
