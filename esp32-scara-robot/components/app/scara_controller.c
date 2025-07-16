@@ -9,9 +9,10 @@ static const char *TAG = "scara_controller";
 wifi_config_t wifi_config_a = {
     .sta =
         {
-            .ssid = WIFI_SSID,
-            .password = WIFI_PASS,
-            .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+            .ssid = "eduroam",
+            .threshold.authmode = WIFI_AUTH_WPA2_ENTERPRISE,
+            .sae_pwe_h2e = WPA3_SAE_PWE_BOTH,
+            .failure_retry_cnt = 3,
         },
 };
 
