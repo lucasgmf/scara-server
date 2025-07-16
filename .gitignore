@@ -7,3 +7,6 @@ result*
 # build files
 esp32-scara-robot/build/
 esp32-scara-robot/.cache/
+
+# credentials
+esp32-scara-robot/components/network/credentials.h
