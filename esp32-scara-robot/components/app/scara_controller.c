@@ -1129,35 +1129,48 @@ void loop_scara_readings() {
   return;
 }
 
-void e_o_que() {
+void update_target_positions() {
   vTaskDelay(pdMS_TO_TICKS(5000));
 
   while (1) {
+    // direct kinematics is active
+    if (client_input_data.dir_kinematics_on &&
+        !client_input_data.inv_kinematics_on) {
+      motor_move_to_position(&motor_x, 6600 * client_input_data.d1,
+                             motor_x.pwm_vars->max_freq);
 
-    motor_move_to_position(&motor_x, 6600 * client_input_data.d1,
-                           motor_x.pwm_vars->max_freq);
+      motor_y.control_vars->encoder_target_pos =
+          client_input_data.theta2 * -1 *
+          motor_y.control_vars->ref_encoder->encoder_resolution / 360 *
+          motor_y.control_vars->ref_encoder->gear_ratio;
 
-    motor_y.control_vars->encoder_target_pos =
-        client_input_data.theta2 * -1 *
-        motor_y.control_vars->ref_encoder->encoder_resolution / 360 *
-        motor_y.control_vars->ref_encoder->gear_ratio;
+      motor_z.control_vars->encoder_target_pos =
+          client_input_data.theta3 *
+              motor_z.control_vars->ref_encoder->encoder_resolution / 360 *
+              motor_z.control_vars->ref_encoder->gear_ratio -
+          motor_y.control_vars->encoder_target_pos;
 
-    motor_z.control_vars->encoder_target_pos =
-        client_input_data.theta3 *
-            motor_z.control_vars->ref_encoder->encoder_resolution / 360 *
-            motor_z.control_vars->ref_encoder->gear_ratio -
-        motor_y.control_vars->encoder_target_pos;
+      motor_a.control_vars->encoder_target_pos =
+          client_input_data.theta4 *
+          motor_a.control_vars->ref_encoder->encoder_resolution / 360 *
+          motor_a.control_vars->ref_encoder->gear_ratio;
 
-    motor_a.control_vars->encoder_target_pos =
-        client_input_data.theta4 *
-        motor_a.control_vars->ref_encoder->encoder_resolution / 360 *
-        motor_a.control_vars->ref_encoder->gear_ratio;
+      motor_b.control_vars->encoder_target_pos =
+          client_input_data.theta5 *
+          motor_b.control_vars->ref_encoder->encoder_resolution / 360 *
+          motor_b.control_vars->ref_encoder->gear_ratio;
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-    motor_b.control_vars->encoder_target_pos =
-        client_input_data.theta5 *
-        motor_b.control_vars->ref_encoder->encoder_resolution / 360 *
-        motor_b.control_vars->ref_encoder->gear_ratio;
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+      // inverse kinematics is on
+    } else if (client_input_data.inv_kinematics_on &&
+               !client_input_data.dir_kinematics_on) {
+
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    } else {
+
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
   }
 }
 
@@ -1267,6 +1280,7 @@ void init_scara() {
   xTaskCreate(loop_scara_readings_2, "testreadings", 4096, NULL, 5, NULL);
 
   /* calibration_initialization_task(); */
-  xTaskCreate(e_o_que, "literalmente o nome", 4096, NULL, 5, NULL);
+  xTaskCreate(update_target_positions, "update target positions", 4096, NULL, 5,
+              NULL);
   ESP_LOGI(TAG, "init_scara completed");
 }
