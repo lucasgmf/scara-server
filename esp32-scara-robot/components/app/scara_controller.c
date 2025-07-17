@@ -940,7 +940,7 @@ void calibration_initialization_task() {
 
   motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq);
   while (!motor_x.control_vars->ref_switch->is_pressed) {
-    /* ESP_LOGI("calibration_initialization_task", "calibrating motor_x"); */
+    ESP_LOGI("calibration_initialization_task", "calibrating motor_x");
     vTaskDelay(20);
   }
   motor_set_target_frequency(&motor_x, 0);
@@ -972,23 +972,6 @@ void calibration_initialization_task() {
   encoder_zero_position(motor_z.control_vars->ref_encoder);
   motor_z.control_vars->encoder_target_pos = 0;
   motor_y.control_vars->encoder_target_pos = 0;
-
-  /* motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq); */
-  /* while (!motor_y.control_vars->ref_switch->is_pressed) { */
-  /*   ESP_LOGI("calibration_initialization_task", "calibrating motor_z"); */
-  /*   vTaskDelay(20); */
-  /* } */
-  /* motor_set_target_frequency(&motor_z, 0); */
-  /* encoder_zero_position(motor_z.control_vars->ref_encoder); */
-  /* motor_z.control_vars->encoder_target_pos = 0; */
-
-  /* // go to middle */
-  /* motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq / 4); */
-  /* while (!motor_z.control_vars->ref_switch->is_pressed) { */
-  /*   ESP_LOGI("calibration_initialization_task", "calibrating motor_z"); */
-  /*   vTaskDelay(20); */
-  /* } */
-  // set new value
   ESP_LOGW("calibration", "\n\n\nAll calibrations done!\n\n\n");
 
   return;
@@ -1130,12 +1113,12 @@ void loop_scara_readings() {
 }
 
 void update_target_positions() {
-  vTaskDelay(pdMS_TO_TICKS(5000));
-
   while (1) {
+
     // direct kinematics is active
     if (client_input_data.dir_kinematics_on &&
         !client_input_data.inv_kinematics_on) {
+
       motor_move_to_position(&motor_x, 6600 * client_input_data.d1,
                              motor_x.pwm_vars->max_freq);
 
@@ -1175,14 +1158,14 @@ void update_target_positions() {
 }
 
 // dimenstions in meters
-#define A1_DIM 9.8 / 2 / 100
-#define A2_DIM 10 / 100
+#define A1_DIM 4.9 / 100
+#define A2_DIM 10.0 / 100
 #define A3_DIM 10.25 / 100
+#define D3_VAL 5.9 / 100
+#define D4_VAL 15.0 / 100
 
 #define D1_MIN_VAL 0
-#define D1_MAX_VAL 45 / 100
-#define D3_VAL 5.9 / 100
-#define D4_VAL 15 / 100
+#define D1_MAX_VAL 45.0 / 100
 
 // angles in degrees
 #define THETA2_MIN_VAL -100
@@ -1194,49 +1177,164 @@ void update_target_positions() {
 
 /* #define THETA3_4_SUM_MAX_VAL */
 
-void calculate_direct_kinematics(system_output_data *data) {
-  data->x = (float)A3_DIM * cosf(data->theta2 + data->theta3) +
-            (float)A2_DIM * cosf(data->theta2) + A1_DIM;
-
-  data->y = (float)A3_DIM * (sinf(data->theta2 + data->theta3)) +
-            (float)A2_DIM * sinf(data->theta2);
-
-  data->z = data->d1 - (float)D3_VAL + (float)D4_VAL;
+void calculate_direct_kinematics(float d1, float theta2, float theta3,
+                                 float theta4, system_output_data *data) {
+  data->x = A1_DIM + A2_DIM * cos(theta2 * M_PI / 180) +
+            A3_DIM * cos((theta2 + theta3) * M_PI / 180);
+  data->y = A2_DIM * sin(theta2 * M_PI / 180) +
+            A3_DIM * sin((theta2 + theta3) * M_PI / 180);
+  data->z = d1 - D3_VAL + D4_VAL;
 }
 
-void update_monitoring_data(system_output_data *system_output_data_t) {
-  system_output_data_t->horizontal_load = hx711_0.raw_read;
-  system_output_data_t->vertical_load = hx711_1.raw_read;
+typedef struct {
+  float d1;
+  float theta2_1;
+  float theta2_2;
+  float theta3_1;
+  float theta3_2;
+} inv_kin_results;
 
-  system_output_data_t->encoder0 = encoder_0.accumulated_steps + rand();
-  system_output_data_t->encoder1 = encoder_1.accumulated_steps + rand();
-  system_output_data_t->encoder2 = encoder_2.accumulated_steps + rand();
-  system_output_data_t->encoder3 = encoder_3.accumulated_steps + rand();
+inv_kin_results inv_kin_results_t;
 
-  system_output_data_t->switch0 = switch_0.is_pressed;
-  system_output_data_t->switch1 = switch_1.is_pressed;
+void calculate_inverse_kinematics(float x, float y, float z,
+                                  inv_kin_results *results) {
+  // TODO: say what is r2
+  float r2 = sqrt(pow(x - A1_DIM, 2) + pow(y, 2));
+  // TODO: say what is beta2!
+  float beta2 = acos((pow(r2, 2) - pow(A2_DIM, 2) - pow(A3_DIM, 2)) /
+                     (-2 * A2_DIM * A3_DIM));
 
-  system_output_data_t->d1 = 0;
+  results->theta3_1 = M_PI - beta2;
+  results->theta3_2 = -results->theta3_1;
+  ESP_LOGI("calculate_inverse_kinematics", "starting debug prints!");
 
-  system_output_data_t->theta2 = -1 * encoder_get_angle_degrees(&encoder_0);
+  ESP_LOGI("theta3_1", "%.2f", results->theta3_1);
+  ESP_LOGI("theta3_2", "%.2f", results->theta3_2);
 
-  system_output_data_t->theta3 =
-      encoder_get_angle_degrees(&encoder_1) - system_output_data_t->theta2;
+  float beta3 = atan2(x - A1_DIM, y);
+  float phi =
+      acos((pow(A2_DIM, 2) + pow(r2, 2) - pow(A3_DIM, 2)) / (2 * A2_DIM * r2));
+  results->theta2_1 = results->theta3_1 - phi;
+  results->theta2_2 = results->theta3_2 - phi;
 
-  system_output_data_t->theta4 = encoder_get_angle_degrees(&encoder_2);
+  return;
+}
 
-  system_output_data_t->theta5 = encoder_get_angle_degrees(&encoder_3);
+// Helper function to check if a point is reachable
+bool is_point_reachable(float x, float y, float z) {
+  float r2 = sqrt(pow(x - A1_DIM, 2) + pow(y, 2));
+  float max_reach = A2_DIM + A3_DIM;
+  float min_reach = fabs(A2_DIM - A3_DIM);
+
+  bool result = r2 <= max_reach && r2 >= min_reach;
+  if (!result)
+    ESP_LOGW("is_point_reachable", "point (%.2f,%.2f,%.2f) is not reachable.",
+             x, y, z);
+  return (result);
+}
+
+void calculate_inverse_kinematics_2(float x, float y, float z,
+                                    inv_kin_results *results) {
+
+  // Calculate r2 - distance from second joint to target in XY plane
+  float r2 = sqrt(pow(x - A1_DIM, 2) + pow(y, 2));
+
+  // Check if target is reachable
+  float max_reach = A2_DIM + A3_DIM;
+  float min_reach = fabs(A2_DIM - A3_DIM);
+
+  if (r2 > max_reach || r2 < min_reach) {
+    ESP_LOGE("calculate_inverse_kinematics",
+             "Target unreachable! r2=%.2f, min=%.2f, max=%.2f", r2, min_reach,
+             max_reach);
+    // Set results to invalid values or handle error appropriately
+    results->d1 = NAN;
+    results->theta2_1 = NAN;
+    results->theta2_2 = NAN;
+    results->theta3_1 = NAN;
+    results->theta3_2 = NAN;
+    return;
+  }
+
+  // Calculate the argument for acos - this is the cosine of the angle between
+  // links
+  float cos_beta2 =
+      (pow(r2, 2) - pow(A2_DIM, 2) - pow(A3_DIM, 2)) / (-2 * A2_DIM * A3_DIM);
+
+  // Clamp the value to [-1, 1] to handle numerical precision issues
+  cos_beta2 = fmaxf(-1.0f, fminf(1.0f, cos_beta2));
+
+  float beta2 = acos(cos_beta2);
+
+  // Calculate theta3 (elbow angle)
+  results->theta3_1 = M_PI - beta2;    // Elbow up configuration
+  results->theta3_2 = -(M_PI - beta2); // Elbow down configuration
+
+  ESP_LOGI("calculate_inverse_kinematics", "starting debug prints!");
+  ESP_LOGI("calculate_inverse_kinematics", "x: %.2f", x);
+  ESP_LOGI("calculate_inverse_kinematics", "y: %.2f", y);
+  ESP_LOGI("calculate_inverse_kinematics", "z: %.2f", z);
+  ESP_LOGI("calculate_inverse_kinematics", "r2: %.2f", r2);
+  ESP_LOGI("calculate_inverse_kinematics", "cos_beta2: %.2f", cos_beta2);
+  ESP_LOGI("calculate_inverse_kinematics", "beta2: %.2f", beta2);
+  ESP_LOGI("theta3_1", "%.2f", results->theta3_1);
+  ESP_LOGI("theta3_2", "%.2f", results->theta3_2);
+
+  // Calculate beta3 (angle to target from first joint)
+  float beta3 = atan2(y, x - A1_DIM);
+
+  // Calculate phi (angle correction for link 2)
+  float cos_phi =
+      (pow(A2_DIM, 2) + pow(r2, 2) - pow(A3_DIM, 2)) / (2 * A2_DIM * r2);
+  cos_phi = fmaxf(-1.0f, fminf(1.0f, cos_phi)); // Clamp again
+  float phi = acos(cos_phi);
+
+  // Calculate theta2 (shoulder angle)
+  results->theta2_1 = beta3 + phi; // For elbow up
+  results->theta2_2 = beta3 - phi; // For elbow down
+
+  // Set d1 (prismatic joint for Z-axis)
+  results->d1 = z;
+
+  ESP_LOGI("calculate_inverse_kinematics", "beta3: %.2f", beta3);
+  ESP_LOGI("calculate_inverse_kinematics", "phi: %.2f", phi);
+  ESP_LOGI("calculate_inverse_kinematics", "theta2_1: %.2f", results->theta2_1);
+  ESP_LOGI("calculate_inverse_kinematics", "theta2_2: %.2f", results->theta2_2);
+  ESP_LOGI("calculate_inverse_kinematics", "");
+  ESP_LOGI("calculate_inverse_kinematics", "");
+  ESP_LOGI("calculate_inverse_kinematics", "");
+  return;
+}
+
+void update_monitoring_data(system_output_data *data) {
+  data->horizontal_load = hx711_0.raw_read;
+  data->vertical_load = hx711_1.raw_read;
+
+  data->encoder0 = encoder_0.accumulated_steps;
+  data->encoder1 = encoder_1.accumulated_steps;
+  data->encoder2 = encoder_2.accumulated_steps;
+  data->encoder3 = encoder_3.accumulated_steps;
+
+  data->switch0 = switch_0.is_pressed;
+  data->switch1 = switch_1.is_pressed;
+
+  // variable parameters
+  data->d1 = 0;
+  data->theta2 = -1 * encoder_get_angle_degrees(&encoder_0);
+  data->theta3 = encoder_get_angle_degrees(&encoder_1) - data->theta2;
+  data->theta4 = encoder_get_angle_degrees(&encoder_2);
+  data->theta5 = encoder_get_angle_degrees(&encoder_3);
 
   // update x, y, z with direct kinematics
-  calculate_direct_kinematics(system_output_data_t);
+  calculate_direct_kinematics(data->d1, data->theta2, data->theta3,
+                              data->theta4, data);
 
-  system_output_data_t->w =
-      system_output_data_t->theta5; // TODO: maybe change this
+  data->w = data->theta5; // TODO: maybe change this
 
-  update_system_output_data(system_output_data_t);
+  update_system_output_data(data);
 }
 
-void read_system_output_data(const system_output_data *data) {
+void print_system_output_data(system_output_data *data) {
   ESP_LOGI(TAG, "horizontal_load: %.2f", data->horizontal_load);
   ESP_LOGI(TAG, "vertical_load: %.2f", data->vertical_load);
   ESP_LOGI(TAG, "encoder0: %.2f", data->encoder0);
@@ -1257,10 +1355,11 @@ void read_system_output_data(const system_output_data *data) {
   ESP_LOGI("", "");
 }
 
+// TODO: make this the only loop for readings
 void loop_scara_readings_2() {
   while (1) {
     update_monitoring_data(&system_output_data_values);
-    read_system_output_data(&system_output_data_values);
+    print_system_output_data(&system_output_data_values);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
@@ -1268,9 +1367,10 @@ void loop_scara_readings_2() {
 void init_scara() {
   // components
   wifi_initialization_func();
-  /* switch_initialization_task(); */
-  /* encoder_initialization_task(); */
-  /* motor_initialization_task(); */
+  switch_initialization_task();
+  encoder_initialization_task();
+  motor_initialization_task();
+  // BUG: broken :C
   /* hx711_initialization_func(); */
 
   // test functions
@@ -1278,8 +1378,9 @@ void init_scara() {
   /* xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL); */
 
   xTaskCreate(loop_scara_readings_2, "testreadings", 4096, NULL, 5, NULL);
+  calibration_initialization_task();
 
-  /* calibration_initialization_task(); */
+  vTaskDelay(pdMS_TO_TICKS(5000));
   xTaskCreate(update_target_positions, "update target positions", 4096, NULL, 5,
               NULL);
   ESP_LOGI(TAG, "init_scara completed");
