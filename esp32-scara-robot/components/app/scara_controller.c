@@ -1359,7 +1359,7 @@ void print_system_output_data(system_output_data *data) {
 void loop_scara_readings_2() {
   while (1) {
     update_monitoring_data(&system_output_data_values);
-    print_system_output_data(&system_output_data_values);
+    /* print_system_output_data(&system_output_data_values); */
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
@@ -1369,7 +1369,7 @@ void init_scara() {
   wifi_initialization_func();
   switch_initialization_task();
   encoder_initialization_task();
-  motor_initialization_task();
+  /* motor_initialization_task(); */
   // BUG: broken :C
   /* hx711_initialization_func(); */
 
@@ -1378,7 +1378,7 @@ void init_scara() {
   /* xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL); */
 
   xTaskCreate(loop_scara_readings_2, "testreadings", 4096, NULL, 5, NULL);
-  calibration_initialization_task();
+  /* calibration_initialization_task(); */
 
   vTaskDelay(pdMS_TO_TICKS(5000));
   xTaskCreate(update_target_positions, "update target positions", 4096, NULL, 5,
