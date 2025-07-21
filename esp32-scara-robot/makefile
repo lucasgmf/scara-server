@@ -10,6 +10,9 @@ flash:
 monitor:
 	idf.py monitor
 
+updatehtml:
+	xxd -i components/network/page.html > components/network/page_html.h
+
 all: build flash monitor
 
 # Default target when just running 'make'
