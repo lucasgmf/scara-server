@@ -56,7 +56,45 @@ user_input_data client_input_data = {
     .hp = 0,
 };
 
-system_output_data system_output_data_values = {};
+system_output_data system_output_data_values = {
+    .horizontal_load = 0.0f,
+    .vertical_load = 0.0f,
+    .encoder0 = 0.0f,
+    .encoder1 = 0.0f,
+    .encoder2 = 0.0f,
+    .encoder3 = 0.0f,
+    .switch0 = 0,
+    .switch1 = 0,
+    .x = 0.0f,
+    .y = 0.0f,
+    .z = 0.0f,
+    .w = 0.0f,
+    .d1 = 0.0f,
+    .theta2 = 0.0f,
+    .theta3 = 0.0f,
+    .theta4 = 0.0f,
+    .theta5 = 0.0f,
+};
+
+system_output_data system_new_output_data_values = {
+    .horizontal_load = 0.0f,
+    .vertical_load = 0.0f,
+    .encoder0 = 0.0f,
+    .encoder1 = 0.0f,
+    .encoder2 = 0.0f,
+    .encoder3 = 0.0f,
+    .switch0 = 0,
+    .switch1 = 0,
+    .x = 0.0f,
+    .y = 0.0f,
+    .z = 0.0f,
+    .w = 0.0f,
+    .d1 = 0.0f,
+    .theta2 = 0.0f,
+    .theta3 = 0.0f,
+    .theta4 = 0.0f,
+    .theta5 = 0.0f,
+};
 
 network_configuration esp_net_conf = {
     .wifi_config = &wifi_config_a,
@@ -235,6 +273,7 @@ static const char *html_page =
     "</div>"
 
     "<script>"
+    "console.log(\"Script loaded!\");"
     "let connected = false;"
 
     "function updateStatus(isConnected) {"
@@ -324,13 +363,17 @@ static const char *html_page =
     "  });"
     "}"
 
-    "// Update output data every second"
-    "setInterval(fetchOutputData, 1000);"
+"console.log('Setting up fetch interval...');"
+"setInterval(function() {"
+"  console.log('Calling fetchOutputData...');"
+"  fetchOutputData();"
+"}, 2000);"
 
-    "// Initial data fetch"
-    "fetchOutputData();"
-    "</script>"
-    "</body></html>";
+"console.log('Calling fetchOutputData manually...');"
+"fetchOutputData();"
+
+"</script>"
+"</body></html>";
 
 // HTTP GET handler for the main page
 static esp_err_t root_get_handler(httpd_req_t *req) {
@@ -479,6 +522,7 @@ static esp_err_t output_get_handler(httpd_req_t *req) {
   if (xSemaphoreTake(g_system_output_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
     memcpy(&local_output, &system_output_data_values,
            sizeof(system_output_data));
+    ESP_LOGI(TAG, "Sending output!");
     xSemaphoreGive(g_system_output_mutex);
   } else {
     httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR,
@@ -548,6 +592,7 @@ static httpd_handle_t start_webserver(void) {
     httpd_register_uri_handler(server, &root);
     httpd_register_uri_handler(server, &control_api);
     httpd_register_uri_handler(server, &output_api);
+    ESP_LOGI(TAG, "Registering URI handlers");
     return server;
   }
 
@@ -555,11 +600,16 @@ static httpd_handle_t start_webserver(void) {
   return NULL;
 }
 
-// Function to update system output data (keep your existing function)
 void update_system_output_data(system_output_data *new_data) {
-  if (xSemaphoreTake(g_system_output_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+  ESP_LOGI("update_system_output_data", "updading data!");
+  if (g_system_output_mutex &&
+      xSemaphoreTake(g_system_output_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
     memcpy(&system_output_data_values, new_data, sizeof(system_output_data));
     xSemaphoreGive(g_system_output_mutex);
+  } else {
+    ESP_LOGE(
+        TAG,
+        "Failed to take g_system_output_mutex in update_system_output_data");
   }
 }
 
@@ -569,12 +619,13 @@ void get_user_input_data(user_input_data *data) {
       xSemaphoreTake(g_user_input_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
     memcpy(data, &client_input_data, sizeof(user_input_data));
     xSemaphoreGive(g_user_input_mutex);
+  } else {
+    ESP_LOGE(TAG, "Failed to take g_user_input_mutex in get_user_input_data");
+    // Optionally, initialize data to default values if mutex cannot be taken
+    memset(data, 0, sizeof(user_input_data));
   }
 }
 
-// Replace your wifi_initialization_func with this:
-
-// Replace your wifi_initialization_func with this:
 void wifi_initialization_func() {
   esp_err_t ret = nvs_flash_init();
   if (ret == ESP_ERR_NVS_NO_FREE_PAGES ||
@@ -1615,7 +1666,6 @@ void update_monitoring_data(system_output_data *data) {
                               data->theta4, data);
 
   data->w = data->theta5; // TODO: maybe change this
-
   update_system_output_data(data);
 }
 
@@ -1643,10 +1693,9 @@ void print_system_output_data(system_output_data *data) {
 // TODO: make this the only loop for readings
 void loop_scara_readings_2() {
   while (1) {
-    update_monitoring_data(&system_output_data_values);
-    update_system_output_data(&system_output_data_values);
-
+    update_monitoring_data(&system_new_output_data_values);
     get_user_input_data(&client_input_data); // Get web interface input
+
     /* print_system_output_data(&system_output_data_values); */
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
