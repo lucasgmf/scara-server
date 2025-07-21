@@ -5,6 +5,15 @@ static const char *TAG = "scara_controller";
 //////////////////////////////////
 ////// network/wifi_manager //////
 //////////////////////////////////
+///
+///
+
+#include "cJSON.h"
+#include "esp_http_server.h"
+
+#ifndef MIN
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
 
 wifi_config_t wifi_config_a = {
     .sta =
@@ -90,14 +99,6 @@ bool is_client_connected() {
   return connected;
 }
 
-// Function to update system output data (call this from your main control loop)
-void update_system_output_data(system_output_data *new_data) {
-  if (xSemaphoreTake(g_system_output_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
-    memcpy(&system_output_data_values, new_data, sizeof(system_output_data));
-    xSemaphoreGive(g_system_output_mutex);
-  }
-}
-
 bool handle_error(bool condition, const char *message, int sock_to_close) {
   if (condition) {
     ESP_LOGE(TAG, "%s: errno %d", message, errno);
@@ -109,203 +110,710 @@ bool handle_error(bool condition, const char *message, int sock_to_close) {
   }
   return false;
 }
+#include "cJSON.h"
+#include "esp_http_server.h"
+#include "esp_log.h"
 
-void tcp_server_task(void *arg) {
-  network_configuration *net_conf = (network_configuration *)arg;
-  if (net_conf == NULL) {
-    ESP_LOGE(TAG, "Parameter is null, aborting.");
-    vTaskDelete(NULL);
-    return;
-  }
+static SemaphoreHandle_t g_user_input_mutex = NULL;
 
-  char rx_buffer[net_conf->rx_buffer_size];
-  char addr_str[net_conf->addr_str_size];
+// HTML page stored in flash memory
+static const char* html_page = 
+"<!DOCTYPE html>"
+"<html><head>"
+"<title>ESP32 Control Panel</title>"
+"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+"<style>"
+"body { font-family: Arial; margin: 20px; background-color: #f0f0f0; }"
+".container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }"
+".section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }"
+".section h3 { margin-top: 0; color: #333; }"
+".input-group { margin: 10px 0; }"
+".input-group label { display: inline-block; width: 100px; font-weight: bold; }"
+".input-group input { width: 100px; padding: 5px; margin: 0 10px; }"
+".checkbox-group { margin: 10px 0; }"
+".checkbox-group input { margin-right: 10px; }"
+".btn { background-color: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }"
+".btn:hover { background-color: #45a049; }"
+".output-data { background-color: #f9f9f9; padding: 10px; border-radius: 5px; font-family: monospace; }"
+".status { padding: 10px; border-radius: 5px; margin: 10px 0; }"
+".status.connected { background-color: #d4edda; color: #155724; }"
+".status.disconnected { background-color: #f8d7da; color: #721c24; }"
+"</style>"
+"</head><body>"
+"<div class=\"container\">"
+"<h1>ESP32 Robot Control Panel</h1>"
 
-  struct sockaddr_in dest_addr = {
-      .sin_addr.s_addr = htonl(INADDR_ANY),
-      .sin_family = AF_INET,
-      .sin_port = htons(net_conf->port),
-  };
+"<div id=\"status\" class=\"status disconnected\">Disconnected</div>"
 
-  int listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-  if (handle_error(listen_sock < 0, "Unable to create socket", -1))
-    return;
+"<div class=\"section\">"
+"<h3>Control Parameters</h3>"
+"<div class=\"input-group\">"
+"<label>d1:</label><input type=\"number\" id=\"d1\" step=\"0.1\" value=\"1\">"
+"<label>theta2:</label><input type=\"number\" id=\"theta2\" step=\"0.1\" value=\"0\">"
+"</div>"
+"<div class=\"input-group\">"
+"<label>theta3:</label><input type=\"number\" id=\"theta3\" step=\"0.1\" value=\"0\">"
+"<label>theta4:</label><input type=\"number\" id=\"theta4\" step=\"0.1\" value=\"0\">"
+"</div>"
+"<div class=\"input-group\">"
+"<label>theta5:</label><input type=\"number\" id=\"theta5\" step=\"0.1\" value=\"0\">"
+"</div>"
+"<div class=\"input-group\">"
+"<label>x:</label><input type=\"number\" id=\"x\" step=\"0.1\" value=\"0\">"
+"<label>y:</label><input type=\"number\" id=\"y\" step=\"0.1\" value=\"0\">"
+"</div>"
+"<div class=\"input-group\">"
+"<label>z:</label><input type=\"number\" id=\"z\" step=\"0.1\" value=\"0\">"
+"<label>w:</label><input type=\"number\" id=\"w\" step=\"0.1\" value=\"0\">"
+"</div>"
+"<div class=\"checkbox-group\">"
+"<label><input type=\"checkbox\" id=\"dir_kinematics_on\"> Direct Kinematics</label>"
+"<label><input type=\"checkbox\" id=\"inv_kinematics_on\"> Inverse Kinematics</label>"
+"</div>"
+"<button class=\"btn\" onclick=\"sendData()\">Send Parameters</button>"
+"</div>"
 
-  // Set socket options for reuse
-  int opt = 1;
-  setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+"<div class=\"section\">"
+"<h3>System Output (Real-time)</h3>"
+"<div id=\"output\" class=\"output-data\">Waiting for data...</div>"
+"</div>"
 
-  ESP_LOGI(TAG, "Socket created");
+"</div>"
 
-  int err = bind(listen_sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
-  if (handle_error(err != 0, "Socket bind failed", listen_sock))
-    return;
+"<script>"
+"let connected = false;"
 
-  ESP_LOGI(TAG, "Socket bound, port %d", net_conf->port);
+"function updateStatus(isConnected) {"
+"  const statusDiv = document.getElementById('status');"
+"  if (isConnected) {"
+"    statusDiv.textContent = 'Connected';"
+"    statusDiv.className = 'status connected';"
+"  } else {"
+"    statusDiv.textContent = 'Disconnected';"
+"    statusDiv.className = 'status disconnected';"
+"  }"
+"  connected = isConnected;"
+"}"
 
-  err = listen(listen_sock, 1);
-  if (handle_error(err != 0, "Listen failed", listen_sock))
-    return;
+"function sendData() {"
+"  const data = {"
+"    d1: parseFloat(document.getElementById('d1').value),"
+"    theta2: parseFloat(document.getElementById('theta2').value),"
+"    theta3: parseFloat(document.getElementById('theta3').value),"
+"    theta4: parseFloat(document.getElementById('theta4').value),"
+"    theta5: parseFloat(document.getElementById('theta5').value),"
+"    x: parseFloat(document.getElementById('x').value),"
+"    y: parseFloat(document.getElementById('y').value),"
+"    z: parseFloat(document.getElementById('z').value),"
+"    w: parseFloat(document.getElementById('w').value),"
+"    dir_kinematics_on: document.getElementById('dir_kinematics_on').checked ? 1 : 0,"
+"    inv_kinematics_on: document.getElementById('inv_kinematics_on').checked ? 1 : 0"
+"  };"
+""
+"  fetch('/api/control', {"
+"    method: 'POST',"
+"    headers: {'Content-Type': 'application/json'},"
+"    body: JSON.stringify(data)"
+"  })"
+"  .then(response => response.json())"
+"  .then(result => {"
+"    console.log('Data sent successfully:', result);"
+"    updateStatus(true);"
+"  })"
+"  .catch(error => {"
+"    console.error('Error sending data:', error);"
+"    updateStatus(false);"
+"  });"
+"}"
 
-  while (1) {
-    ESP_LOGI(TAG, "Waiting for connection...");
+"function fetchOutputData() {"
+"  fetch('/api/output')"
+"  .then(response => response.json())"
+"  .then(data => {"
+"    const output = document.getElementById('output');"
+"    output.innerHTML = "
+"      'Horizontal Load: ' + data.horizontal_load + '<br>' +"
+"      'Vertical Load: ' + data.vertical_load + '<br>' +"
+"      'Encoder0: ' + data.encoder0 + '<br>' +"
+"      'Encoder1: ' + data.encoder1 + '<br>' +"
+"      'Encoder2: ' + data.encoder2 + '<br>' +"
+"      'Encoder3: ' + data.encoder3 + '<br>' +"
+"      'Switch0: ' + data.switch0 + '<br>' +"
+"      'Switch1: ' + data.switch1 + '<br>' +"
+"      'Position x: ' + data.x + '<br>' +"
+"      'Position y: ' + data.y + '<br>' +"
+"      'Position z: ' + data.z + '<br>' +"
+"      'Position w: ' + data.w + '<br>' +"
+"      'd1: ' + data.d1 + '<br>' +"
+"      'theta2: ' + data.theta2 + '<br>' +"
+"      'theta3: ' + data.theta3 + '<br>' +"
+"      'theta4: ' + data.theta4 + '<br>' +"
+"      'theta5: ' + data.theta5;"
+"    updateStatus(true);"
+"  })"
+"  .catch(error => {"
+"    console.error('Error fetching output data:', error);"
+"    updateStatus(false);"
+"  });"
+"}"
 
-    struct sockaddr_in6 source_addr;
-    socklen_t addr_len = sizeof(source_addr);
-    int sock = accept(listen_sock, (struct sockaddr *)&source_addr, &addr_len);
+"// Update output data every second"
+"setInterval(fetchOutputData, 1000);"
 
-    if (sock < 0) {
-      ESP_LOGE(TAG, "Unable to accept connection: errno %d", errno);
-      continue; // Continue listening instead of breaking
-    }
+"// Initial data fetch"
+"fetchOutputData();"
+"</script>"
+"</body></html>";
+// HTML page stored in flash memory
+static const char *html_page_2 =
+    "<!DOCTYPE html>"
+    "<!DOCTYPE html>"
+    "<html>"
+    "<head>"
+        "<title>ESP32 SCARA Robot Control Panel</title>"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+        "<!-- Tailwind CSS CDN -->"
+        "<script src=\"https://cdn.tailwindcss.com\"></script>"
+        "<style>"
+            "/* Custom styles for Inter font and general body styling */"
+            "body {"
+                "font-family: 'Inter', sans-serif;"
+                "background-color: #f3f4f6; /* Light gray background */"
+            "}"
+            "/* Style for disabled panels */"
+            ".panel-disabled {"
+                "opacity: 0.5;"
+                "pointer-events: none;"
+                "filter: grayscale(80%); /* Visually gray out */"
+            "}"
+            "/* Hide number input arrows for a cleaner look */"
+            "input[type=\"number\"]::-webkit-outer-spin-button,"
+            "input[type=\"number\"]::-webkit-inner-spin-button {"
+                "-webkit-appearance: none;"
+                "margin: 0;"
+            "}"
+            "input[type=\"number\"] {"
+                "-moz-appearance: textfield;"
+            "}"
+        "</style>"
+    "</head>"
+    "<body class=\"p-4 sm:p-6 md:p-8 lg:p-10\">"
+        "<div class=\"max-w-6xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden\">"
+            "<!-- Header Section -->"
+            "<div class=\"bg-gradient-to-r from-blue-600 to-purple-700 p-6 text-white text-center rounded-t-2xl\">"
+                "<h1 class=\"text-3xl sm:text-4xl font-extrabold mb-2\">SCARA Robot Control Panel</h1>"
+                "<p class=\"text-lg sm:text-xl font-light\">Educational Interface for ESP32</p>"
+            "</div>"
+    ""
+            "<!-- Connection Status -->"
+            "<div id=\"status\" class=\"status disconnected text-center py-3 px-4 rounded-b-lg font-semibold transition-colors duration-300\">"
+                "Disconnected"
+            "</div>"
+    ""
+            "<!-- Main Grid Layout for Panels -->"
+            "<div class=\"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6\">"
+    ""
+                "<!-- Panel 1: Mode Selection -->"
+                "<div class=\"panel bg-blue-50 border border-blue-200 rounded-xl p-5 shadow-md flex flex-col justify-between\">"
+                    "<h3 class=\"text-xl font-semibold text-blue-800 mb-4\">1. Select Operation Mode</h3>"
+                    "<div class=\"space-y-3\">"
+                        "<label class=\"flex items-center p-3 bg-white rounded-lg shadow-sm cursor-pointer hover:bg-blue-100 transition-colors duration-200\">"
+                            "<input type=\"radio\" name=\"operation_mode\" id=\"mode_direct_kinematics\" value=\"direct_kinematics\" class=\"form-radio h-5 w-5 text-blue-600 focus:ring-blue-500\" checked>"
+                            "<span class=\"ml-3 text-lg font-medium text-gray-800\">Direct Kinematics</span>"
+                        "</label>"
+                        "<label class=\"flex items-center p-3 bg-white rounded-lg shadow-sm cursor-pointer hover:bg-blue-100 transition-colors duration-200\">"
+                            "<input type=\"radio\" name=\"operation_mode\" id=\"mode_inverse_kinematics\" value=\"inverse_kinematics\" class=\"form-radio h-5 w-5 text-blue-600 focus:ring-blue-500\">"
+                            "<span class=\"ml-3 text-lg font-medium text-gray-800\">Inverse Kinematics</span>"
+                        "</label>"
+                        "<label class=\"flex items-center p-3 bg-white rounded-lg shadow-sm cursor-pointer hover:bg-blue-100 transition-colors duration-200\">"
+                            "<input type=\"radio\" name=\"operation_mode\" id=\"mode_pick_place\" value=\"pick_place\" class=\"form-radio h-5 w-5 text-blue-600 focus:ring-blue-500\">"
+                            "<span class=\"ml-3 text-lg font-medium text-gray-800\">Pick and Place</span>"
+                        "</label>"
+                    "</div>"
+                    "<button onclick=\"sendData()\" class=\"mt-6 w-full bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transform hover:scale-105 transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-green-300\">"
+                        "Send Parameters"
+                    "</button>"
+                "</div>"
+    ""
+                "<!-- Panel 2: Direct Kinematics Parameters -->"
+                "<div id=\"panel_direct_kinematics\" class=\"panel bg-white border border-gray-200 rounded-xl p-5 shadow-md\">"
+                    "<h3 class=\"text-xl font-semibold text-gray-800 mb-4\">2. Direct Kinematics Parameters</h3>"
+                    "<div class=\"space-y-4\">"
+                        "<div class=\"flex items-center justify-between\">"
+                            "<label for=\"dk_d1\" class=\"text-gray-700 font-medium w-24\">d1 (mm):</label>"
+                            "<input type=\"number\" id=\"dk_d1\" step=\"0.1\" value=\"100.0\" class=\"flex-grow p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-center\">"
+                        "</div>"
+                        "<div class=\"flex items-center justify-between\">"
+                            "<label for=\"dk_theta2\" class=\"text-gray-700 font-medium w-24\">Theta2 (°):</label>"
+                            "<input type=\"number\" id=\"dk_theta2\" step=\"0.1\" value=\"0.0\" class=\"flex-grow p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-center\">"
+                        "</div>"
+                        "<div class=\"flex items-center justify-between\">"
+                            "<label for=\"dk_theta3\" class=\"text-gray-700 font-medium w-24\">Theta3 (°):</label>"
+                            "<input type=\"number\" id=\"dk_theta3\" step=\"0.1\" value=\"0.0\" class=\"flex-grow p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-center\">"
+                        "</div>"
+                        "<div class=\"flex items-center justify-between\">"
+                            "<label for=\"dk_theta4\" class=\"text-gray-700 font-medium w-24\">Theta4 (°):</label>"
+                            "<input type=\"number\" id=\"dk_theta4\" step=\"0.1\" value=\"0.0\" class=\"flex-grow p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-center\">"
+                        "</div>"
+                        "<div class=\"flex items-center justify-between\">"
+                            "<label for=\"dk_theta5\" class=\"text-gray-700 font-medium w-24\">Theta5 (°):</label>"
+                            "<input type=\"number\" id=\"dk_theta5\" step=\"0.1\" value=\"0.0\" class=\"flex-grow p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-center\">"
+                        "</div>"
+                    "</div>"
+                "</div>"
+    ""
+                "<!-- Panel 3: Inverse Kinematics Parameters -->"
+                "<div id=\"panel_inverse_kinematics\" class=\"panel bg-white border border-gray-200 rounded-xl p-5 shadow-md panel-disabled\">"
+                    "<h3 class=\"text-xl font-semibold text-gray-800 mb-4\">3. Inverse Kinematics Parameters</h3>"
+                    "<div class=\"space-y-4\">"
+                        "<div class=\"flex items-center justify-between\">"
+                            "<label for=\"ik_x\" class=\"text-gray-700 font-medium w-24\">X (mm):</label>"
+                            "<input type=\"number\" id=\"ik_x\" step=\"0.1\" value=\"0.0\" class=\"flex-grow p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-center\">"
+                        "</div>"
+                        "<div class=\"flex items-center justify-between\">"
+                            "<label for=\"ik_y\" class=\"text-gray-700 font-medium w-24\">Y (mm):</label>"
+                            "<input type=\"number\" id=\"ik_y\" step=\"0.1\" value=\"0.0\" class=\"flex-grow p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-center\">"
+                        "</div>"
+                        "<div class=\"flex items-center justify-between\">"
+                            "<label for=\"ik_z\" class=\"text-gray-700 font-medium w-24\">Z (mm):</label>"
+                            "<input type=\"number\" id=\"ik_z\" step=\"0.1\" value=\"0.0\" class=\"flex-grow p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-center\">"
+                        "</div>"
+                        "<div class=\"flex items-center justify-between\">"
+                            "<label for=\"ik_w\" class=\"text-gray-700 font-medium w-24\">W (rad):</label>"
+                            "<input type=\"number\" id=\"ik_w\" step=\"0.1\" value=\"0.0\" class=\"flex-grow p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-center\">"
+                        "</div>"
+                    "</div>"
+                "</div>"
+    ""
+                "<!-- Panel 4: Pick and Place Parameters -->"
+                "<div id=\"panel_pick_place\" class=\"panel bg-white border border-gray-200 rounded-xl p-5 shadow-md panel-disabled\">"
+                    "<h3 class=\"text-xl font-semibold text-gray-800 mb-4\">4. Pick and Place Parameters</h3>"
+                    "<div class=\"space-y-6\">"
+                        "<div>"
+                            "<h4 class=\"text-lg font-medium text-gray-700 mb-2\">Pick Position:</h4>"
+                            "<div class=\"grid grid-cols-2 gap-4\">"
+                                "<div class=\"flex items-center\">"
+                                    "<label for=\"pp_pick_x\" class=\"text-gray-600 w-16\">X:</label>"
+                                    "<input type=\"number\" id=\"pp_pick_x\" step=\"0.1\" value=\"50.0\" class=\"flex-grow p-2 border border-gray-300 rounded-md text-center\">"
+                                "</div>"
+                                "<div class=\"flex items-center\">"
+                                    "<label for=\"pp_pick_y\" class=\"text-gray-600 w-16\">Y:</label>"
+                                    "<input type=\"number\" id=\"pp_pick_y\" step=\"0.1\" value=\"50.0\" class=\"flex-grow p-2 border border-gray-300 rounded-md text-center\">"
+                                "</div>"
+                                "<div class=\"flex items-center\">"
+                                    "<label for=\"pp_pick_z\" class=\"text-gray-600 w-16\">Z:</label>"
+                                    "<input type=\"number\" id=\"pp_pick_z\" step=\"0.1\" value=\"10.0\" class=\"flex-grow p-2 border border-gray-300 rounded-md text-center\">"
+                                "</div>"
+                                "<div class=\"flex items-center\">"
+                                    "<label for=\"pp_pick_w\" class=\"text-gray-600 w-16\">W:</label>"
+                                    "<input type=\"number\" id=\"pp_pick_w\" step=\"0.1\" value=\"0.0\" class=\"flex-grow p-2 border border-gray-300 rounded-md text-center\">"
+                                "</div>"
+                            "</div>"
+                        "</div>"
+                        "<div>"
+                            "<h4 class=\"text-lg font-medium text-gray-700 mb-2\">Place Position:</h4>"
+                            "<div class=\"grid grid-cols-2 gap-4\">"
+                                "<div class=\"flex items-center\">"
+                                    "<label for=\"pp_place_x\" class=\"text-gray-600 w-16\">X:</label>"
+                                    "<input type=\"number\" id=\"pp_place_x\" step=\"0.1\" value=\"-50.0\" class=\"flex-grow p-2 border border-gray-300 rounded-md text-center\">"
+                                "</div>"
+                                "<div class=\"flex items-center\">"
+                                    "<label for=\"pp_place_y\" class=\"text-gray-600 w-16\">Y:</label>"
+                                    "<input type=\"number\" id=\"pp_place_y\" step=\"0.1\" value=\"-50.0\" class=\"flex-grow p-2 border border-gray-300 rounded-md text-center\">"
+                                "</div>"
+                                "<div class=\"flex items-center\">"
+                                    "<label for=\"pp_place_z\" class=\"text-gray-600 w-16\">Z:</label>"
+                                    "<input type=\"number\" id=\"pp_place_z\" step=\"0.1\" value=\"10.0\" class=\"flex-grow p-2 border border-gray-300 rounded-md text-center\">"
+                                "</div>"
+                                "<div class=\"flex items-center\">"
+                                    "<label for=\"pp_place_w\" class=\"text-gray-600 w-16\">W:</label>"
+                                    "<input type=\"number\" id=\"pp_place_w\" step=\"0.1\" value=\"0.0\" class=\"flex-grow p-2 border border-gray-300 rounded-md text-center\">"
+                                "</div>"
+                            "</div>"
+                        "</div>"
+                    "</div>"
+                "</div>"
+    ""
+                "<!-- Panel 5: Sensor and Output Data Monitoring -->"
+                "<div class=\"panel bg-purple-50 border border-purple-200 rounded-xl p-5 shadow-md md:col-span-2 lg:col-span-1\">"
+                    "<h3 class=\"text-xl font-semibold text-purple-800 mb-4\">5. System Output (Real-time)</h3>"
+                    "<div id=\"output\" class=\"output-data bg-white p-4 rounded-lg shadow-inner text-gray-800 font-mono text-sm overflow-auto h-64\">"
+                        "Waiting for data..."
+                    "</div>"
+                "</div>"
+    ""
+            "</div>"
+        "</div>"
+    ""
+        "<script>"
+            "let connected = false;"
+    ""
+            "// Function to update connection status display"
+            "function updateStatus(isConnected) {"
+                "const statusDiv = document.getElementById('status');"
+                "if (isConnected) {"
+                    "statusDiv.textContent = 'Connected';"
+                    "statusDiv.className = 'status connected bg-green-200 text-green-800';"
+                "} else {"
+                    "statusDiv.textContent = 'Disconnected';"
+                    "statusDiv.className = 'status disconnected bg-red-200 text-red-800';"
+                "}"
+                "connected = isConnected;"
+            "}"
+    ""
+            "// Function to enable/disable parameter panels based on selected mode"
+            "function handleModeChange() {"
+                "const directKinematicsRadio = document.getElementById('mode_direct_kinematics');"
+                "const inverseKinematicsRadio = document.getElementById('mode_inverse_kinematics');"
+                "const pickPlaceRadio = document.getElementById('mode_pick_place');"
+    ""
+                "const dkPanel = document.getElementById('panel_direct_kinematics');"
+                "const ikPanel = document.getElementById('panel_inverse_kinematics');"
+                "const ppPanel = document.getElementById('panel_pick_place');"
+    ""
+                "// Disable all panels initially"
+                "dkPanel.classList.add('panel-disabled');"
+                "ikPanel.classList.add('panel-disabled');"
+                "ppPanel.classList.add('panel-disabled');"
+    ""
+                "// Enable the selected panel"
+                "if (directKinematicsRadio.checked) {"
+                    "dkPanel.classList.remove('panel-disabled');"
+                "} else if (inverseKinematicsRadio.checked) {"
+                    "ikPanel.classList.remove('panel-disabled');"
+                "} else if (pickPlaceRadio.checked) {"
+                    "ppPanel.classList.remove('panel-disabled');"
+                "}"
+            "}"
+    ""
+            "// Function to send data to the ESP32"
+            "async function sendData() {"
+                "let data = {};"
+                "const directKinematicsRadio = document.getElementById('mode_direct_kinematics');"
+                "const inverseKinematicsRadio = document.getElementById('mode_inverse_kinematics');"
+                "const pickPlaceRadio = document.getElementById('mode_pick_place');"
+    ""
+                "// Initialize all mode flags to 0"
+                "data.dir_kinematics_on = 0;"
+                "data.inv_kinematics_on = 0;"
+                "data.pick_place_on = 0; // New flag for pick and place"
+    ""
+                "// Collect data based on the selected mode"
+                "if (directKinematicsRadio.checked) {"
+                    "data.dir_kinematics_on = 1;"
+                    "data.d1 = parseFloat(document.getElementById('dk_d1').value);"
+                    "data.theta2 = parseFloat(document.getElementById('dk_theta2').value);"
+                    "data.theta3 = parseFloat(document.getElementById('dk_theta3').value);"
+                    "data.theta4 = parseFloat(document.getElementById('dk_theta4').value);"
+                    "data.theta5 = parseFloat(document.getElementById('dk_theta5').value);"
+                    "// Set IK/PP parameters to default/zero if not used, to avoid sending garbage"
+                    "data.x = 0; data.y = 0; data.z = 0; data.w = 0;"
+                    "data.pick_x1 = 0; data.pick_y1 = 0; data.pick_z1 = 0; data.pick_w1 = 0;"
+                    "data.place_x1 = 0; data.place_y1 = 0; data.place_z1 = 0; data.place_w1 = 0;"
+    ""
+                "} else if (inverseKinematicsRadio.checked) {"
+                    "data.inv_kinematics_on = 1;"
+                    "data.x = parseFloat(document.getElementById('ik_x').value);"
+                    "data.y = parseFloat(document.getElementById('ik_y').value);"
+                    "data.z = parseFloat(document.getElementById('ik_z').value);"
+                    "data.w = parseFloat(document.getElementById('ik_w').value);"
+                    "// Set DK/PP parameters to default/zero if not used"
+                    "data.d1 = 0; data.theta2 = 0; data.theta3 = 0; data.theta4 = 0; data.theta5 = 0;"
+                    "data.pick_x1 = 0; data.pick_y1 = 0; data.pick_z1 = 0; data.pick_w1 = 0;"
+                    "data.place_x1 = 0; data.place_y1 = 0; data.place_z1 = 0; data.place_w1 = 0;"
+    ""
+                "} else if (pickPlaceRadio.checked) {"
+                    "data.pick_place_on = 1;"
+                    "data.pick_x1 = parseFloat(document.getElementById('pp_pick_x').value);"
+                    "data.pick_y1 = parseFloat(document.getElementById('pp_pick_y').value);"
+                    "data.pick_z1 = parseFloat(document.getElementById('pp_pick_z').value);"
+                    "data.pick_w1 = parseFloat(document.getElementById('pp_pick_w').value);"
+                    "data.place_x1 = parseFloat(document.getElementById('pp_place_x').value);"
+                    "data.place_y1 = parseFloat(document.getElementById('pp_place_y').value);"
+                    "data.place_z1 = parseFloat(document.getElementById('pp_place_z').value);"
+                    "data.place_w1 = parseFloat(document.getElementById('pp_place_w').value);"
+                    "// Set DK/IK parameters to default/zero if not used"
+                    "data.d1 = 0; data.theta2 = 0; data.theta3 = 0; data.theta4 = 0; data.theta5 = 0;"
+                    "data.x = 0; data.y = 0; data.z = 0; data.w = 0;"
+                "}"
+    ""
+                "console.log('Sending data:', data); // Log the data being sent"
+    ""
+                "try {"
+                    "const response = await fetch('/api/control', {"
+                        "method: 'POST',"
+                        "headers: { 'Content-Type': 'application/json' },"
+                        "body: JSON.stringify(data)"
+                    "});"
+                    "if (!response.ok) {"
+                        "throw new Error(`HTTP error! status: ${response.status}`);"
+                    "}"
+                    "const result = await response.json();"
+                    "console.log('Data sent successfully:', result);"
+                    "updateStatus(true);"
+                "} catch (error) {"
+                    "console.error('Error sending data:', error);"
+                    "updateStatus(false);"
+                "}"
+            "}"
+    ""
+            "// Function to fetch real-time output data from the ESP32"
+            "async function fetchOutputData() {"
+                "try {"
+                    "const response = await fetch('/api/output');"
+                    "if (!response.ok) {"
+                        "throw new Error(`HTTP error! status: ${response.status}`);"
+                    "}"
+                    "const data = await response.json();"
+                    "const output = document.getElementById('output');"
+                    "output.innerHTML = `"
+                        "<p><strong>Horizontal Load:</strong> ${data.horizontal_load !== undefined ? data.horizontal_load : 'N/A'}</p>"
+                        "<p><strong>Vertical Load:</strong> ${data.vertical_load !== undefined ? data.vertical_load : 'N/A'}</p>"
+                        "<p><strong>Encoder0:</strong> ${data.encoder0 !== undefined ? data.encoder0 : 'N/A'}</p>"
+                        "<p><strong>Encoder1:</strong> ${data.encoder1 !== undefined ? data.encoder1 : 'N/A'}</p>"
+                        "<p><strong>Encoder2:</strong> ${data.encoder2 !== undefined ? data.encoder2 : 'N/A'}</p>"
+                        "<p><strong>Encoder3:</strong> ${data.encoder3 !== undefined ? data.encoder3 : 'N/A'}</p>"
+                        "<p><strong>Switch0:</strong> ${data.switch0 !== undefined ? data.switch0 : 'N/A'}</p>"
+                        "<p><strong>Switch1:</strong> ${data.switch1 !== undefined ? data.switch1 : 'N/A'}</p>"
+                        "<p><strong>Position X:</strong> ${data.x !== undefined ? data.x : 'N/A'}</p>"
+                        "<p><strong>Position Y:</strong> ${data.y !== undefined ? data.y : 'N/A'}</p>"
+                        "<p><strong>Position Z:</strong> ${data.z !== undefined ? data.z : 'N/A'}</p>"
+                        "<p><strong>Position W:</strong> ${data.w !== undefined ? data.w : 'N/A'}</p>"
+                        "<p><strong>d1:</strong> ${data.d1 !== undefined ? data.d1 : 'N/A'}</p>"
+                        "<p><strong>theta2:</strong> ${data.theta2 !== undefined ? data.theta2 : 'N/A'}</p>"
+                        "<p><strong>theta3:</strong> ${data.theta3 !== undefined ? data.theta3 : 'N/A'}</p>"
+                        "<p><strong>theta4:</strong> ${data.theta4 !== undefined ? data.theta4 : 'N/A'}</p>"
+                        "<p><strong>theta5:</strong> ${data.theta5 !== undefined ? data.theta5 : 'N/A'}</p>"
+                    "`;"
+                    "updateStatus(true);"
+                "} catch (error) {"
+                    "console.error('Error fetching output data:', error);"
+                    "output.innerHTML = `<p class=\"text-red-500\">Error fetching data. Please check connection.</p>`;"
+                    "updateStatus(false);"
+                "}"
+            "}"
+    ""
+            "// Event Listeners for mode selection"
+            "document.addEventListener('DOMContentLoaded', () => {"
+                "const modeRadios = document.querySelectorAll('input[name=\"operation_mode\"]');"
+                "modeRadios.forEach(radio => {"
+                    "radio.addEventListener('change', handleModeChange);"
+                "});"
+    ""
+                "// Initial setup on page load"
+                "handleModeChange(); // Set initial panel visibility"
+                "fetchOutputData(); // Fetch initial data"
+                "setInterval(fetchOutputData, 1000); // Update output data every second"
+            "});"
+        "</script>"
+    "</body>"
+    "</html>";
 
-    // Set socket timeout for receive operations
-    struct timeval timeout;
-    timeout.tv_sec = 5; // 5 second timeout
-    timeout.tv_usec = 0;
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-
-    // Set the client socket for the sender task
-    set_client_socket(sock);
-
-    inet_ntoa_r(((struct sockaddr_in *)&source_addr)->sin_addr, addr_str,
-                sizeof(addr_str) - 1);
-    ESP_LOGI(TAG, "Connection from %s", addr_str);
-
-    // Handle client communication
-    while (1) {
-      int len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
-
-      if (len < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-          ESP_LOGD(TAG, "Receive timeout, continuing...");
-          continue; // Timeout, continue listening
-        } else {
-          ESP_LOGE(TAG, "recv failed: errno %d", errno);
-          break;
-        }
-      } else if (len == 0) {
-        ESP_LOGI(TAG, "Connection closed by client");
-        break;
-      } else {
-        rx_buffer[len] = 0;
-        ESP_LOGI(TAG, "Received: %s", rx_buffer);
-
-        // Parse the received data
-        int count = sscanf(
-            rx_buffer, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%d,%d",
-            &net_conf->user_input_data->d1, &net_conf->user_input_data->theta2,
-            &net_conf->user_input_data->theta3,
-            &net_conf->user_input_data->theta4,
-            &net_conf->user_input_data->theta5, &net_conf->user_input_data->x,
-            &net_conf->user_input_data->y, &net_conf->user_input_data->z,
-            &net_conf->user_input_data->w,
-            &net_conf->user_input_data->dir_kinematics_on,
-            &net_conf->user_input_data->inv_kinematics_on);
-
-        if (count == 11) {
-          ESP_LOGI(TAG, "Parsed values:");
-          ESP_LOGI(TAG,
-                   "Float values: %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, "
-                   "%.2f, %.2f",
-                   net_conf->user_input_data->d1,
-                   net_conf->user_input_data->theta2,
-                   net_conf->user_input_data->theta3,
-                   net_conf->user_input_data->theta4,
-                   net_conf->user_input_data->theta5,
-                   net_conf->user_input_data->x, net_conf->user_input_data->y,
-                   net_conf->user_input_data->z, net_conf->user_input_data->w);
-          ESP_LOGI(
-              TAG, "Boolean values: %s, %s",
-              net_conf->user_input_data->dir_kinematics_on ? "true" : "false",
-              net_conf->user_input_data->inv_kinematics_on ? "true" : "false");
-        } else {
-          ESP_LOGW(TAG,
-                   "Failed to parse input data. Expected 11 values, got %d. "
-                   "Received: %s",
-                   count, rx_buffer);
-        }
-      }
-    }
-
-    // Clear client socket when connection closes
-    set_client_socket(-1);
-
-    ESP_LOGI(TAG, "Closing connection");
-    shutdown(sock, SHUT_RDWR);
-    close(sock);
-  }
-
-  close(listen_sock);
-  vTaskDelete(NULL);
+// HTTP GET handler for the main page
+static esp_err_t root_get_handler(httpd_req_t *req) {
+  httpd_resp_set_type(req, "text/html");
+  httpd_resp_send(req, html_page, HTTPD_RESP_USE_STRLEN);
+  return ESP_OK;
 }
 
-// Improved TCP sender task that sends every 1 second
-void tcp_sender_task(void *arg) {
-  char tx_buffer[512];
+// HTTP POST handler for control data
+static esp_err_t control_post_handler(httpd_req_t *req) {
+  char buf[512];
+  int ret, remaining = req->content_len;
+
+  if (remaining >= sizeof(buf)) {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Content too large");
+    return ESP_FAIL;
+  }
+
+  ret = httpd_req_recv(req, buf, MIN(remaining, sizeof(buf)));
+  if (ret <= 0) {
+    if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+      httpd_resp_send_err(req, HTTPD_408_REQ_TIMEOUT, "Request timeout");
+    }
+    return ESP_FAIL;
+  }
+
+  buf[ret] = '\0';
+
+  // Parse JSON data
+  cJSON *json = cJSON_Parse(buf);
+  if (json == NULL) {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+    return ESP_FAIL;
+  }
+
+  // Create mutex if not exists
+  if (g_user_input_mutex == NULL) {
+    g_user_input_mutex = xSemaphoreCreateMutex();
+  }
+
+  // Update user input data with mutex protection
+  if (xSemaphoreTake(g_user_input_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+    cJSON *item;
+
+    if ((item = cJSON_GetObjectItem(json, "d1")) != NULL) {
+      client_input_data.d1 = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "theta2")) != NULL) {
+      client_input_data.theta2 = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "theta3")) != NULL) {
+      client_input_data.theta3 = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "theta4")) != NULL) {
+      client_input_data.theta4 = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "theta5")) != NULL) {
+      client_input_data.theta5 = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "x")) != NULL) {
+      client_input_data.x = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "y")) != NULL) {
+      client_input_data.y = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "z")) != NULL) {
+      client_input_data.z = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "w")) != NULL) {
+      client_input_data.w = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "dir_kinematics_on")) != NULL) {
+      client_input_data.dir_kinematics_on = (int)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "inv_kinematics_on")) != NULL) {
+      client_input_data.inv_kinematics_on = (int)cJSON_GetNumberValue(item);
+    }
+
+    xSemaphoreGive(g_user_input_mutex);
+
+    ESP_LOGI(TAG,
+             "Updated input data: d1=%.2f, theta2=%.2f, theta3=%.2f, "
+             "theta4=%.2f, theta5=%.2f",
+             client_input_data.d1, client_input_data.theta2,
+             client_input_data.theta3, client_input_data.theta4,
+             client_input_data.theta5);
+    ESP_LOGI(TAG, "Position: x=%.2f, y=%.2f, z=%.2f, w=%.2f",
+             client_input_data.x, client_input_data.y, client_input_data.z,
+             client_input_data.w);
+    ESP_LOGI(TAG, "Kinematics: dir=%d, inv=%d",
+             client_input_data.dir_kinematics_on,
+             client_input_data.inv_kinematics_on);
+  }
+
+  cJSON_Delete(json);
+
+  // Send success response
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_send(req, "{\"status\":\"success\"}", HTTPD_RESP_USE_STRLEN);
+  return ESP_OK;
+}
+
+// HTTP GET handler for output data
+static esp_err_t output_get_handler(httpd_req_t *req) {
   system_output_data local_output;
-  TickType_t last_wake_time = xTaskGetTickCount();
-  const TickType_t send_period = pdMS_TO_TICKS(1000); // 1 second
 
-  ESP_LOGI(TAG, "TCP sender task started");
+  // Get current system output data with mutex protection
+  if (xSemaphoreTake(g_system_output_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+    memcpy(&local_output, &system_output_data_values,
+           sizeof(system_output_data));
+    xSemaphoreGive(g_system_output_mutex);
+  } else {
+    httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR,
+                        "Failed to get data");
+    return ESP_FAIL;
+  }
 
-  while (1) {
-    // Wait for the next cycle (1 second intervals)
-    vTaskDelayUntil(&last_wake_time, send_period);
+  // Create JSON response
+  char json_buffer[1024];
+  snprintf(json_buffer, sizeof(json_buffer),
+           "{"
+           "\"horizontal_load\":%.3f,"
+           "\"vertical_load\":%.3f,"
+           "\"encoder0\":%.3f,"
+           "\"encoder1\":%.3f,"
+           "\"encoder2\":%.3f,"
+           "\"encoder3\":%.3f,"
+           "\"switch0\":%d,"
+           "\"switch1\":%d,"
+           "\"x\":%.3f,"
+           "\"y\":%.3f,"
+           "\"z\":%.3f,"
+           "\"w\":%.3f,"
+           "\"d1\":%.3f,"
+           "\"theta2\":%.3f,"
+           "\"theta3\":%.3f,"
+           "\"theta4\":%.3f,"
+           "\"theta5\":%.3f"
+           "}",
+           local_output.horizontal_load, local_output.vertical_load,
+           local_output.encoder0, local_output.encoder1, local_output.encoder2,
+           local_output.encoder3, local_output.switch0, local_output.switch1,
+           local_output.x, local_output.y, local_output.z, local_output.w,
+           local_output.d1, local_output.theta2, local_output.theta3,
+           local_output.theta4, local_output.theta5);
 
-    // Check if client is connected
-    if (!is_client_connected()) {
-      ESP_LOGD(TAG, "No client connected, skipping send");
-      continue;
-    }
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_send(req, json_buffer, HTTPD_RESP_USE_STRLEN);
+  return ESP_OK;
+}
 
-    // Get current client socket
-    int client_sock = get_client_socket();
-    if (client_sock < 0) {
-      ESP_LOGD(TAG, "Invalid client socket, skipping send");
-      continue;
-    }
+// URI handlers
+static const httpd_uri_t root = {.uri = "/",
+                                 .method = HTTP_GET,
+                                 .handler = root_get_handler,
+                                 .user_ctx = NULL};
 
-    // Get current system output data
-    if (xSemaphoreTake(g_system_output_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-      memcpy(&local_output, &system_output_data_values,
-             sizeof(system_output_data));
-      xSemaphoreGive(g_system_output_mutex);
+static const httpd_uri_t control_api = {.uri = "/api/control",
+                                        .method = HTTP_POST,
+                                        .handler = control_post_handler,
+                                        .user_ctx = NULL};
 
-      // Format the data as CSV string
-      int len = snprintf(
-          tx_buffer, sizeof(tx_buffer),
-          "%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%."
-          "3f,%.3f,%.3f\n",
-          local_output.horizontal_load, local_output.vertical_load,
-          local_output.encoder0, local_output.encoder1, local_output.encoder2,
-          local_output.encoder3, local_output.switch0, local_output.switch1,
-          local_output.x, local_output.y, local_output.z, local_output.w,
-          local_output.d1, local_output.theta2, local_output.theta3,
-          local_output.theta4, local_output.theta5);
+static const httpd_uri_t output_api = {.uri = "/api/output",
+                                       .method = HTTP_GET,
+                                       .handler = output_get_handler,
+                                       .user_ctx = NULL};
 
-      if (len > 0 && len < sizeof(tx_buffer)) {
-        // Send data to client
-        int err = send(client_sock, tx_buffer, len, MSG_DONTWAIT);
-        if (err < 0) {
-          if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            ESP_LOGW(TAG, "Send would block, client might be slow");
-          } else {
-            ESP_LOGE(TAG, "Error sending data: errno %d", errno);
-            // Don't reset socket here, let the receiver task handle it
-          }
-        } else {
-          ESP_LOGI(TAG, "Sent %d bytes to client", err);
-        }
-      } else {
-        ESP_LOGE(TAG, "Buffer overflow in snprintf");
-      }
-    } else {
-      ESP_LOGW(TAG, "Failed to get system output data mutex");
-    }
+// Function to start the web server
+static httpd_handle_t start_webserver(void) {
+  httpd_handle_t server = NULL;
+  httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+  config.lru_purge_enable = true;
+
+  ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
+  if (httpd_start(&server, &config) == ESP_OK) {
+    ESP_LOGI(TAG, "Registering URI handlers");
+    httpd_register_uri_handler(server, &root);
+    httpd_register_uri_handler(server, &control_api);
+    httpd_register_uri_handler(server, &output_api);
+    return server;
+  }
+
+  ESP_LOGI(TAG, "Error starting server!");
+  return NULL;
+}
+
+// Function to update system output data (keep your existing function)
+void update_system_output_data(system_output_data *new_data) {
+  if (xSemaphoreTake(g_system_output_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+    memcpy(&system_output_data_values, new_data, sizeof(system_output_data));
+    xSemaphoreGive(g_system_output_mutex);
   }
 }
 
+// Function to get current user input data (new function for your control loop)
+void get_user_input_data(user_input_data *data) {
+  if (g_user_input_mutex &&
+      xSemaphoreTake(g_user_input_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+    memcpy(data, &client_input_data, sizeof(user_input_data));
+    xSemaphoreGive(g_user_input_mutex);
+  }
+}
+
+// Replace your wifi_initialization_func with this:
+
+// Replace your wifi_initialization_func with this:
 void wifi_initialization_func() {
   esp_err_t ret = nvs_flash_init();
   if (ret == ESP_ERR_NVS_NO_FREE_PAGES ||
@@ -315,16 +823,15 @@ void wifi_initialization_func() {
   }
 
   // Create mutexes
-  g_client_sock_mutex = xSemaphoreCreateMutex();
   g_system_output_mutex = xSemaphoreCreateMutex();
-  g_connection_mutex = xSemaphoreCreateMutex();
+  g_user_input_mutex = xSemaphoreCreateMutex();
 
-  if (g_client_sock_mutex == NULL || g_system_output_mutex == NULL ||
-      g_connection_mutex == NULL) {
+  if (g_system_output_mutex == NULL || g_user_input_mutex == NULL) {
     ESP_LOGE(TAG, "Failed to create mutexes");
     return;
   }
 
+  // Initialize WiFi (assuming you have an init_wifi function)
   esp_err_t wifi_result = init_wifi(&esp_net_conf);
   if (wifi_result != ESP_OK) {
     ESP_LOGE(TAG, "Exiting: Wi-Fi connection failed.");
@@ -332,13 +839,18 @@ void wifi_initialization_func() {
     return;
   }
 
-  // Create tasks with appropriate stack sizes and priorities
-  xTaskCreate(tcp_server_task, "tcp_server", 4096, &esp_net_conf, 5, NULL);
-  xTaskCreate(tcp_sender_task, "tcp_sender", 3072, NULL, 4, NULL);
+  // Start the web server instead of TCP tasks
+  httpd_handle_t server = start_webserver();
+  if (server == NULL) {
+    ESP_LOGE(TAG, "Failed to start web server");
+    return;
+  }
 
+  ESP_LOGI(
+      TAG,
+      "Web server started successfully. Connect to: http://[ESP32_IP_ADDRESS]");
   return;
 }
-
 ///////////////////////////
 ////// switch /////////////
 ///////////////////////////
@@ -1112,9 +1624,24 @@ void loop_scara_readings() {
   return;
 }
 
+typedef struct {
+  float d1;
+  float theta2_1;
+  float theta2_2;
+  float theta3_1;
+  float theta3_2;
+} inv_kin_results;
+
+inv_kin_results inv_kin_results_t;
+user_input_data current_input;
+
+void calculate_inverse_kinematics_2(float x, float y, float z,
+                                    inv_kin_results *results);
 void update_target_positions() {
   while (1) {
 
+    get_user_input_data(&current_input); // Get latest user input
+                                         //
     // direct kinematics is active
     if (client_input_data.dir_kinematics_on &&
         !client_input_data.inv_kinematics_on) {
@@ -1147,7 +1674,36 @@ void update_target_positions() {
       // inverse kinematics is on
     } else if (client_input_data.inv_kinematics_on &&
                !client_input_data.dir_kinematics_on) {
+      calculate_inverse_kinematics_2(client_input_data.x, client_input_data.y,
+                                     client_input_data.z, &inv_kin_results_t);
+      /* ESP_LOGI("client_input_data", "x: %.2f", client_input_data.x); */
+      /* ESP_LOGI("client_input_data", "y: %.2f", client_input_data.y); */
+      /* ESP_LOGI("client_input_data", "z: %.2f", client_input_data.z); */
+      /* ESP_LOGI("client_input_data", "w: %.2f", client_input_data.w); */
 
+      motor_move_to_position(&motor_x, 6600 * inv_kin_results_t.d1,
+                             motor_x.pwm_vars->max_freq);
+
+      motor_y.control_vars->encoder_target_pos =
+          inv_kin_results_t.theta2_1 * 180 / M_PI * -1 *
+          motor_y.control_vars->ref_encoder->encoder_resolution / 360 *
+          motor_y.control_vars->ref_encoder->gear_ratio;
+
+      motor_z.control_vars->encoder_target_pos =
+          inv_kin_results_t.theta3_1 *
+              motor_z.control_vars->ref_encoder->encoder_resolution / 360 *
+              motor_z.control_vars->ref_encoder->gear_ratio -
+          motor_y.control_vars->encoder_target_pos;
+
+      motor_a.control_vars->encoder_target_pos =
+          client_input_data.theta4 *
+          motor_a.control_vars->ref_encoder->encoder_resolution / 360 *
+          motor_a.control_vars->ref_encoder->gear_ratio;
+
+      motor_b.control_vars->encoder_target_pos =
+          client_input_data.theta5 *
+          motor_b.control_vars->ref_encoder->encoder_resolution / 360 *
+          motor_b.control_vars->ref_encoder->gear_ratio;
       vTaskDelay(1000 / portTICK_PERIOD_MS);
 
     } else {
@@ -1186,40 +1742,6 @@ void calculate_direct_kinematics(float d1, float theta2, float theta3,
   data->z = d1 - D3_VAL + D4_VAL;
 }
 
-typedef struct {
-  float d1;
-  float theta2_1;
-  float theta2_2;
-  float theta3_1;
-  float theta3_2;
-} inv_kin_results;
-
-inv_kin_results inv_kin_results_t;
-
-void calculate_inverse_kinematics(float x, float y, float z,
-                                  inv_kin_results *results) {
-  // TODO: say what is r2
-  float r2 = sqrt(pow(x - A1_DIM, 2) + pow(y, 2));
-  // TODO: say what is beta2!
-  float beta2 = acos((pow(r2, 2) - pow(A2_DIM, 2) - pow(A3_DIM, 2)) /
-                     (-2 * A2_DIM * A3_DIM));
-
-  results->theta3_1 = M_PI - beta2;
-  results->theta3_2 = -results->theta3_1;
-  ESP_LOGI("calculate_inverse_kinematics", "starting debug prints!");
-
-  ESP_LOGI("theta3_1", "%.2f", results->theta3_1);
-  ESP_LOGI("theta3_2", "%.2f", results->theta3_2);
-
-  float beta3 = atan2(x - A1_DIM, y);
-  float phi =
-      acos((pow(A2_DIM, 2) + pow(r2, 2) - pow(A3_DIM, 2)) / (2 * A2_DIM * r2));
-  results->theta2_1 = results->theta3_1 - phi;
-  results->theta2_2 = results->theta3_2 - phi;
-
-  return;
-}
-
 // Helper function to check if a point is reachable
 bool is_point_reachable(float x, float y, float z) {
   float r2 = sqrt(pow(x - A1_DIM, 2) + pow(y, 2));
@@ -1247,12 +1769,13 @@ void calculate_inverse_kinematics_2(float x, float y, float z,
     ESP_LOGE("calculate_inverse_kinematics",
              "Target unreachable! r2=%.2f, min=%.2f, max=%.2f", r2, min_reach,
              max_reach);
-    // Set results to invalid values or handle error appropriately
-    results->d1 = NAN;
-    results->theta2_1 = NAN;
-    results->theta2_2 = NAN;
-    results->theta3_1 = NAN;
-    results->theta3_2 = NAN;
+    // TODO: return to default position
+    /* results->d1 = NAN; */
+    /* results->theta2_1 = NAN; */
+    /* results->theta2_2 = NAN; */
+    /* results->theta3_1 = NAN; */
+    /* results->theta3_2 = NAN; */
+
     return;
   }
 
@@ -1270,15 +1793,15 @@ void calculate_inverse_kinematics_2(float x, float y, float z,
   results->theta3_1 = M_PI - beta2;    // Elbow up configuration
   results->theta3_2 = -(M_PI - beta2); // Elbow down configuration
 
-  ESP_LOGI("calculate_inverse_kinematics", "starting debug prints!");
-  ESP_LOGI("calculate_inverse_kinematics", "x: %.2f", x);
-  ESP_LOGI("calculate_inverse_kinematics", "y: %.2f", y);
-  ESP_LOGI("calculate_inverse_kinematics", "z: %.2f", z);
-  ESP_LOGI("calculate_inverse_kinematics", "r2: %.2f", r2);
-  ESP_LOGI("calculate_inverse_kinematics", "cos_beta2: %.2f", cos_beta2);
-  ESP_LOGI("calculate_inverse_kinematics", "beta2: %.2f", beta2);
-  ESP_LOGI("theta3_1", "%.2f", results->theta3_1);
-  ESP_LOGI("theta3_2", "%.2f", results->theta3_2);
+  /* ESP_LOGI("calculate_inverse_kinematics", "starting debug prints!"); */
+  /* ESP_LOGI("calculate_inverse_kinematics", "x: %.2f", x); */
+  /* ESP_LOGI("calculate_inverse_kinematics", "y: %.2f", y); */
+  /* ESP_LOGI("calculate_inverse_kinematics", "z: %.2f", z); */
+  /* ESP_LOGI("calculate_inverse_kinematics", "r2: %.2f", r2); */
+  /* ESP_LOGI("calculate_inverse_kinematics", "cos_beta2: %.2f", cos_beta2); */
+  /* ESP_LOGI("calculate_inverse_kinematics", "beta2: %.2f", beta2); */
+  /* ESP_LOGI("theta3_1", "%.2f", results->theta3_1); */
+  /* ESP_LOGI("theta3_2", "%.2f", results->theta3_2); */
 
   // Calculate beta3 (angle to target from first joint)
   float beta3 = atan2(y, x - A1_DIM);
@@ -1296,13 +1819,15 @@ void calculate_inverse_kinematics_2(float x, float y, float z,
   // Set d1 (prismatic joint for Z-axis)
   results->d1 = z;
 
-  ESP_LOGI("calculate_inverse_kinematics", "beta3: %.2f", beta3);
-  ESP_LOGI("calculate_inverse_kinematics", "phi: %.2f", phi);
-  ESP_LOGI("calculate_inverse_kinematics", "theta2_1: %.2f", results->theta2_1);
-  ESP_LOGI("calculate_inverse_kinematics", "theta2_2: %.2f", results->theta2_2);
-  ESP_LOGI("calculate_inverse_kinematics", "");
-  ESP_LOGI("calculate_inverse_kinematics", "");
-  ESP_LOGI("calculate_inverse_kinematics", "");
+  /* ESP_LOGI("calculate_inverse_kinematics", "beta3: %.2f", beta3); */
+  /* ESP_LOGI("calculate_inverse_kinematics", "phi: %.2f", phi); */
+  /* ESP_LOGI("calculate_inverse_kinematics", "theta2_1: %.2f",
+   * results->theta2_1); */
+  /* ESP_LOGI("calculate_inverse_kinematics", "theta2_2: %.2f",
+   * results->theta2_2); */
+  /* ESP_LOGI("calculate_inverse_kinematics", ""); */
+  /* ESP_LOGI("calculate_inverse_kinematics", ""); */
+  /* ESP_LOGI("calculate_inverse_kinematics", ""); */
   return;
 }
 
@@ -1320,6 +1845,8 @@ void update_monitoring_data(system_output_data *data) {
 
   // variable parameters
   data->d1 = 0;
+
+  // BUG: broken
   data->theta2 = -1 * encoder_get_angle_degrees(&encoder_0);
   data->theta3 = encoder_get_angle_degrees(&encoder_1) - data->theta2;
   data->theta4 = encoder_get_angle_degrees(&encoder_2);
@@ -1369,7 +1896,7 @@ void init_scara() {
   wifi_initialization_func();
   switch_initialization_task();
   encoder_initialization_task();
-  /* motor_initialization_task(); */
+  motor_initialization_task();
   // BUG: broken :C
   /* hx711_initialization_func(); */
 
@@ -1377,9 +1904,10 @@ void init_scara() {
   /* xTaskCreate(loop_scara_task, "testloop", 4096, NULL, 5, NULL); */
   /* xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL); */
 
-  xTaskCreate(loop_scara_readings_2, "testreadings", 4096, NULL, 5, NULL);
-  /* calibration_initialization_task(); */
+  /* xTaskCreate(loop_scara_readings_2, "testreadings", 4096, NULL, 5, NULL); */
+  calibration_initialization_task();
 
+  /* calculate_inverse_kinematics_2(0.10, 0.10, 0.10, &inv_kin_results_t); */
   vTaskDelay(pdMS_TO_TICKS(5000));
   xTaskCreate(update_target_positions, "update target positions", 4096, NULL, 5,
               NULL);
