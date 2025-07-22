@@ -62,7 +62,7 @@
 
     .dashboard {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: 20px;
       margin-bottom: 20px;
     }
@@ -126,7 +126,7 @@
 
     .control-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(2, 1fr);
       gap: 20px;
     }
 
@@ -181,6 +181,44 @@
       letter-spacing: 0.5px;
     }
 
+    /* Special layout for Pick and Place section */
+    .pick-place-layout {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .pick-place-position {
+      flex: 1;
+    }
+
+    .pick-place-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 60px;
+      height: 60px;
+      background: linear-gradient(135deg, var(--accent-color), #ff8c42);
+      border-radius: 50%;
+      color: white;
+      font-size: 24px;
+      font-weight: bold;
+      box-shadow: var(--shadow);
+      animation: arrowPulse 2s ease-in-out infinite;
+      position: relative;
+    }
+
+    @keyframes arrowPulse {
+      0%, 100% {
+        transform: scale(1);
+        box-shadow: var(--shadow);
+      }
+      50% {
+        transform: scale(1.05);
+        box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4);
+      }
+    }
+
     .parameter-row {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -225,7 +263,6 @@
     .mode-controls {
       display: grid;
       gap: 12px;
-      margin-top: 20px;
     }
 
     .checkbox-item {
@@ -368,8 +405,21 @@
     }
 
     @media (max-width: 1200px) {
-      .control-grid {
+      .dashboard {
         grid-template-columns: 1fr 1fr;
+      }
+      
+      .control-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .pick-place-layout {
+        flex-direction: column;
+        gap: 15px;
+      }
+
+      .pick-place-arrow {
+        transform: rotate(90deg);
       }
     }
 
@@ -388,6 +438,15 @@
       
       .header h1 {
         font-size: 2rem;
+      }
+
+      .pick-place-layout {
+        flex-direction: column;
+        gap: 15px;
+      }
+
+      .pick-place-arrow {
+        transform: rotate(90deg);
       }
     }
   </style>
@@ -435,6 +494,27 @@
           <button class="send-button" style="background: linear-gradient(135deg, var(--warning-color), #d97706);" onclick="resetToHome()">
             Reset to Home
           </button>
+        </div>
+      </div>
+
+      <div class="status-panel">
+        <h2 class="section-title">
+          <div class="section-icon">🔧</div>
+          Operation Modes
+        </h2>
+        <div class="mode-controls">
+          <div class="checkbox-item">
+            <input type="checkbox" id="dir_kinematics_on">
+            <label for="dir_kinematics_on">Direct Kinematics</label>
+          </div>
+          <div class="checkbox-item">
+            <input type="checkbox" id="inv_kinematics_on">
+            <label for="inv_kinematics_on">Inverse Kinematics</label>
+          </div>
+          <div class="checkbox-item">
+            <input type="checkbox" id="pick_and_place_on">
+            <label for="pick_and_place_on">Pick and Place Mode</label>
+          </div>
         </div>
       </div>
     </div>
@@ -527,73 +607,61 @@
           <div class="section-icon">🤖</div>
           Pick and Place
         </h2>
-        <div class="parameter-groups">
-          <div class="parameter-group">
-            <h4>Initial Position (mm)</h4>
-            <div class="parameter-row">
-              <div class="input-field">
-                <label>Xip</label>
-                <input type="number" id="xip" step="0.1" value="0">
+        <div class="pick-place-layout">
+          <div class="pick-place-position">
+            <div class="parameter-group">
+              <h4>Initial Position (mm)</h4>
+              <div class="parameter-row">
+                <div class="input-field">
+                  <label>Xip</label>
+                  <input type="number" id="xip" step="0.1" value="0">
+                </div>
+                <div class="input-field">
+                  <label>Yip</label>
+                  <input type="number" id="yip" step="0.1" value="0">
+                </div>
               </div>
-              <div class="input-field">
-                <label>Yip</label>
-                <input type="number" id="yip" step="0.1" value="0">
-              </div>
-            </div>
-            <div class="parameter-row">
-              <div class="input-field">
-                <label>Zip</label>
-                <input type="number" id="zip" step="0.1" value="0">
-              </div>
-              <div class="input-field">
-                <label>Wip</label>
-                <input type="number" id="wip" step="0.1" value="0">
-              </div>
-            </div>
-          </div>
-          <div class="parameter-group">
-            <h4>Final Position (mm)</h4>
-            <div class="parameter-row">
-              <div class="input-field">
-                <label>Xfp</label>
-                <input type="number" id="xfp" step="0.1" value="0">
-              </div>
-              <div class="input-field">
-                <label>Yfp</label>
-                <input type="number" id="yfp" step="0.1" value="0">
-              </div>
-            </div>
-            <div class="parameter-row">
-              <div class="input-field">
-                <label>Zfp</label>
-                <input type="number" id="zfp" step="0.1" value="0">
-              </div>
-              <div class="input-field">
-                <label>Wfp</label>
-                <input type="number" id="wfp" step="0.1" value="0">
+              <div class="parameter-row">
+                <div class="input-field">
+                  <label>Zip</label>
+                  <input type="number" id="zip" step="0.1" value="0">
+                </div>
+                <div class="input-field">
+                  <label>Wip</label>
+                  <input type="number" id="wip" step="0.1" value="0">
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      <div class="control-section">
-        <h2 class="section-title">
-          <div class="section-icon">🔧</div>
-          Operation Modes
-        </h2>
-        <div class="mode-controls">
-          <div class="checkbox-item">
-            <input type="checkbox" id="dir_kinematics_on">
-            <label for="dir_kinematics_on">Direct Kinematics</label>
+          <div class="pick-place-arrow">
+            →
           </div>
-          <div class="checkbox-item">
-            <input type="checkbox" id="inv_kinematics_on">
-            <label for="inv_kinematics_on">Inverse Kinematics</label>
-          </div>
-          <div class="checkbox-item">
-            <input type="checkbox" id="pick_and_place_on">
-            <label for="pick_and_place_on">Pick and Place Mode</label>
+
+          <div class="pick-place-position">
+            <div class="parameter-group">
+              <h4>Final Position (mm)</h4>
+              <div class="parameter-row">
+                <div class="input-field">
+                  <label>Xfp</label>
+                  <input type="number" id="xfp" step="0.1" value="0">
+                </div>
+                <div class="input-field">
+                  <label>Yfp</label>
+                  <input type="number" id="yfp" step="0.1" value="0">
+                </div>
+              </div>
+              <div class="parameter-row">
+                <div class="input-field">
+                  <label>Zfp</label>
+                  <input type="number" id="zfp" step="0.1" value="0">
+                </div>
+                <div class="input-field">
+                  <label>Wfp</label>
+                  <input type="number" id="wfp" step="0.1" value="0">
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
