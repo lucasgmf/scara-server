@@ -136,6 +136,29 @@
       padding: 24px;
       box-shadow: var(--shadow-lg);
       border: 1px solid var(--border-color);
+      transition: all 0.3s ease;
+    }
+
+    /* New styles for inactive panels */
+    .control-section.inactive {
+      background: #f1f5f9;
+      opacity: 0.5;
+      pointer-events: none;
+      filter: grayscale(0.8);
+    }
+
+    .control-section.inactive .section-title {
+      color: var(--text-secondary);
+    }
+
+    .control-section.inactive .section-icon {
+      background: var(--text-secondary);
+    }
+
+    .control-section.inactive input {
+      background: #e2e8f0;
+      border-color: #cbd5e1;
+      color: var(--text-secondary);
     }
 
     .section-title {
@@ -491,15 +514,15 @@
         </h2>
         <div class="mode-controls">
           <div class="checkbox-item">
-            <input type="checkbox" id="dir_kinematics_on">
+            <input type="checkbox" id="dir_kinematics_on" onchange="toggleMode('direct')">
             <label for="dir_kinematics_on">Direct Kinematics</label>
           </div>
           <div class="checkbox-item">
-            <input type="checkbox" id="inv_kinematics_on">
+            <input type="checkbox" id="inv_kinematics_on" onchange="toggleMode('inverse')">
             <label for="inv_kinematics_on">Inverse Kinematics</label>
           </div>
           <div class="checkbox-item">
-            <input type="checkbox" id="pick_and_place_on">
+            <input type="checkbox" id="pick_and_place_on" onchange="toggleMode('pickplace')">
             <label for="pick_and_place_on">Pick and Place Mode</label>
           </div>
         </div>
@@ -507,7 +530,7 @@
     </div>
 
     <div class="control-grid">
-      <div class="control-section">
+      <div class="control-section inactive" id="direct-kinematics-panel">
         <h2 class="section-title">
           <div class="section-icon">⚙️</div>
           Direct Kinematics
@@ -548,7 +571,7 @@
         </div>
       </div>
 
-      <div class="control-section">
+      <div class="control-section inactive" id="inverse-kinematics-panel">
         <h2 class="section-title">
           <div class="section-icon">📍</div>
           Inverse Kinematics
@@ -589,7 +612,7 @@
         </div>
       </div>
 
-      <div class="control-section">
+      <div class="control-section inactive" id="pick-place-panel">
         <h2 class="section-title">
           <div class="section-icon">🤖</div>
           Pick and Place
@@ -686,6 +709,35 @@
       connected = isConnected;
     }
 
+    function toggleMode(mode) {
+      // Get all checkboxes
+      const directCheckbox = document.getElementById('dir_kinematics_on');
+      const inverseCheckbox = document.getElementById('inv_kinematics_on');
+      const pickPlaceCheckbox = document.getElementById('pick_and_place_on');
+      
+      // Get all panels
+      const directPanel = document.getElementById('direct-kinematics-panel');
+      const inversePanel = document.getElementById('inverse-kinematics-panel');
+      const pickPlacePanel = document.getElementById('pick-place-panel');
+
+      // First, uncheck all other modes
+      if (mode === 'direct') {
+        inverseCheckbox.checked = false;
+        pickPlaceCheckbox.checked = false;
+      } else if (mode === 'inverse') {
+        directCheckbox.checked = false;
+        pickPlaceCheckbox.checked = false;
+      } else if (mode === 'pickplace') {
+        directCheckbox.checked = false;
+        inverseCheckbox.checked = false;
+      }
+
+      // Update panel states based on checkbox states
+      directPanel.classList.toggle('inactive', !directCheckbox.checked);
+      inversePanel.classList.toggle('inactive', !inverseCheckbox.checked);
+      pickPlacePanel.classList.toggle('inactive', !pickPlaceCheckbox.checked);
+    }
+
     function resetToHome() {
       // Reset all parameters to home position
       document.getElementById('d1').value = '1';
@@ -709,6 +761,12 @@
       document.getElementById('dir_kinematics_on').checked = false;
       document.getElementById('inv_kinematics_on').checked = false;
       document.getElementById('pick_and_place_on').checked = false;
+      
+      // Reset all panels to inactive state
+      document.getElementById('direct-kinematics-panel').classList.add('inactive');
+      document.getElementById('inverse-kinematics-panel').classList.add('inactive');
+      document.getElementById('pick-place-panel').classList.add('inactive');
+      
       sendData();
     }
 
