@@ -126,7 +126,7 @@
 
     .control-grid {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(3, 1fr);
       gap: 20px;
     }
 
@@ -181,11 +181,11 @@
       letter-spacing: 0.5px;
     }
 
-    /* Special layout for Pick and Place section */
+    /* Updated Pick and Place section for horizontal layout */
     .pick-place-layout {
       display: flex;
       align-items: center;
-      gap: 20px;
+      gap: 15px;
     }
 
     .pick-place-position {
@@ -196,27 +196,14 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      min-width: 60px;
-      height: 60px;
-      background: linear-gradient(135deg, var(--accent-color), #ff8c42);
-      border-radius: 50%;
+      min-width: 40px;
+      height: 40px;
+      background: #9ca3af;
+      border-radius: 6px;
       color: white;
-      font-size: 24px;
-      font-weight: bold;
-      box-shadow: var(--shadow);
-      animation: arrowPulse 2s ease-in-out infinite;
-      position: relative;
-    }
-
-    @keyframes arrowPulse {
-      0%, 100% {
-        transform: scale(1);
-        box-shadow: var(--shadow);
-      }
-      50% {
-        transform: scale(1.05);
-        box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4);
-      }
+      font-size: 18px;
+      font-weight: normal;
+      box-shadow: none;
     }
 
     .parameter-row {
@@ -410,7 +397,7 @@
       }
       
       .control-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
       }
 
       .pick-place-layout {
