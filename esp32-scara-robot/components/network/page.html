@@ -126,7 +126,7 @@
 
     .control-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: 20px;
     }
 
@@ -367,6 +367,12 @@
       100% { transform: rotate(360deg); }
     }
 
+    @media (max-width: 1200px) {
+      .control-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
     @media (max-width: 768px) {
       .dashboard {
         grid-template-columns: 1fr;
@@ -437,7 +443,7 @@
       <div class="control-section">
         <h2 class="section-title">
           <div class="section-icon">⚙️</div>
-          Joint Parameters
+          Direct Kinematics
         </h2>
         <div class="parameter-groups">
           <div class="parameter-group">
@@ -478,7 +484,7 @@
       <div class="control-section">
         <h2 class="section-title">
           <div class="section-icon">📍</div>
-          Position Control
+          Inverse Kinematics
         </h2>
         <div class="parameter-groups">
           <div class="parameter-group">
@@ -504,6 +510,24 @@
               </div>
             </div>
           </div>
+          <div class="parameter-group">
+            <h4>Home Position</h4>
+            <div class="parameter-row">
+              <div class="input-field">
+                <label>HP (mm)</label>
+                <input type="number" id="hp" step="0.1" value="0">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="control-section">
+        <h2 class="section-title">
+          <div class="section-icon">🤖</div>
+          Pick and Place
+        </h2>
+        <div class="parameter-groups">
           <div class="parameter-group">
             <h4>Initial Position (mm)</h4>
             <div class="parameter-row">
@@ -547,15 +571,6 @@
               <div class="input-field">
                 <label>Wfp</label>
                 <input type="number" id="wfp" step="0.1" value="0">
-              </div>
-            </div>
-          </div>
-          <div class="parameter-group">
-            <h4>Home Position</h4>
-            <div class="parameter-row">
-              <div class="input-field">
-                <label>HP (mm)</label>
-                <input type="number" id="hp" step="0.1" value="0">
               </div>
             </div>
           </div>
