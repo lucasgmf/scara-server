@@ -1,7 +1,7 @@
 .PHONY: build flash monitor all
 
 build:
-	xxd -i components/network/page.html > components/network/page_html.h
+	xxd -i components/network/page.html > components/network/page_html.h;
 	idf.py build
 
 flash:
