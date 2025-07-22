@@ -10,3 +10,6 @@ esp32-scara-robot/.cache/
 
 # credentials
 esp32-scara-robot/components/network/credentials.h
+
+# Hexadecimal page_html.h
+esp32-scara-robot/components/network/page_html.h
