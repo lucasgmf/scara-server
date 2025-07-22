@@ -5,8 +5,6 @@ static const char *TAG = "scara_controller";
 //////////////////////////////////
 ////// network/wifi_manager //////
 //////////////////////////////////
-///
-///
 
 #include "cJSON.h"
 #include "esp_http_server.h"
@@ -1479,7 +1477,26 @@ void print_system_output_data(system_output_data *data) {
   ESP_LOGI(TAG, "theta3: %.2f", data->theta3);
   ESP_LOGI(TAG, "theta4: %.2f", data->theta4);
   ESP_LOGI(TAG, "theta5: %.2f", data->theta5);
-  ESP_LOGI("", "");
+  ESP_LOGI(TAG, "d1: %.2f", client_input_data.d1);
+  ESP_LOGI(TAG, "theta2: %.2f", client_input_data.theta2);
+  ESP_LOGI(TAG, "theta3: %.2f", client_input_data.theta3);
+  ESP_LOGI(TAG, "theta4: %.2f", client_input_data.theta4);
+  ESP_LOGI(TAG, "theta5: %.2f", client_input_data.theta5);
+  ESP_LOGI(TAG, "inv_kinematics_on: %.2f", client_input_data.inv_kinematics_on);
+  ESP_LOGI(TAG, "x: %.2f", client_input_data.x);
+  ESP_LOGI(TAG, "y: %2f", client_input_data.y);
+  ESP_LOGI(TAG, "z: %2f", client_input_data.z);
+  ESP_LOGI(TAG, "w: %2f", client_input_data.w);
+  ESP_LOGI(TAG, "pick_and_place_on: %2f", client_input_data.pick_and_place_on);
+  ESP_LOGI(TAG, "xip: %2f", client_input_data.xip);
+  ESP_LOGI(TAG, "yip: %2f", client_input_data.yip);
+  ESP_LOGI(TAG, "zip: %2f", client_input_data.zip);
+  ESP_LOGI(TAG, "wip: %2f", client_input_data.wip);
+  ESP_LOGI(TAG, "xfp: %2f", client_input_data.xfp);
+  ESP_LOGI(TAG, "yfp: %2f", client_input_data.yfp);
+  ESP_LOGI(TAG, "zfp: %2f", client_input_data.zfp);
+  ESP_LOGI(TAG, "wfp: %2f", client_input_data.wfp);
+  ESP_LOGI(TAG, "hp: %2f", client_input_data.hp);
 }
 
 // TODO: make this the only loop for readings
@@ -1488,7 +1505,7 @@ void loop_scara_readings_2() {
     update_monitoring_data(&system_new_output_data_values);
     get_user_input_data(&client_input_data); // Get web interface input
 
-    /* print_system_output_data(&system_output_data_values); */
+    print_system_output_data(&system_output_data_values);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
