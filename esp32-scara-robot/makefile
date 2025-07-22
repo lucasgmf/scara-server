@@ -1,6 +1,7 @@
 .PHONY: build flash monitor all
 
 build:
+	xxd -i components/network/page.html > components/network/page_html.h
 	idf.py build
 
 flash:
@@ -9,9 +10,6 @@ flash:
 
 monitor:
 	idf.py monitor
-
-updatehtml:
-	xxd -i components/network/page.html > components/network/page_html.h
 
 all: build flash monitor
 
