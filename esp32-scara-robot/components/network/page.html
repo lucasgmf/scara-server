@@ -640,6 +640,10 @@
                   <label>w</label>
                   <input type="number" id="wip" step="0.1" value="0">
                 </div>
+                <div class="input-field">
+                  <label>claw %</label>
+                  <input type="number" id="cp" step="0.1" value="0">
+                </div>
               </div>
             </div>
           </div>
@@ -758,6 +762,7 @@
       document.getElementById('zfp').value = '0';
       document.getElementById('wfp').value = '0';
       document.getElementById('hp').value = '0';
+      document.getElementById('cp').value = '0';
       document.getElementById('dir_kinematics_on').checked = false;
       document.getElementById('inv_kinematics_on').checked = false;
       document.getElementById('pick_and_place_on').checked = false;
@@ -790,6 +795,7 @@
         zfp: parseFloat(document.getElementById('zfp').value),
         wfp: parseFloat(document.getElementById('wfp').value),
         hp: parseFloat(document.getElementById('hp').value),
+        cp: parseFloat(document.getElementById('cp').value),
         dir_kinematics_on: document.getElementById('dir_kinematics_on').checked ? 1 : 0,
         inv_kinematics_on: document.getElementById('inv_kinematics_on').checked ? 1 : 0,
         pick_and_place_on: document.getElementById('pick_and_place_on').checked ? 1 : 0

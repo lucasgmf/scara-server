@@ -45,6 +45,7 @@ typedef struct {
   float zfp;
   float wfp;
   float hp;
+  float cp;
 } user_input_data;
 
 typedef struct {

@@ -52,6 +52,7 @@ user_input_data client_input_data = {
     .zfp = 0,
     .wfp = 0,
     .hp = 0,
+    .cp = 0,
 };
 
 system_output_data system_output_data_values = {
@@ -262,6 +263,9 @@ static esp_err_t control_post_handler(httpd_req_t *req) {
     if ((item = cJSON_GetObjectItem(json, "hp")) != NULL) {
       client_input_data.hp = (float)cJSON_GetNumberValue(item);
     }
+    if ((item = cJSON_GetObjectItem(json, "cp")) != NULL) {
+      client_input_data.cp = (float)cJSON_GetNumberValue(item);
+    }
     if ((item = cJSON_GetObjectItem(json, "dir_kinematics_on")) != NULL) {
       client_input_data.dir_kinematics_on = (int)cJSON_GetNumberValue(item);
     }
@@ -283,13 +287,14 @@ static esp_err_t control_post_handler(httpd_req_t *req) {
     ESP_LOGI(TAG, "Position: x=%.2f, y=%.2f, z=%.2f, w=%.2f",
              client_input_data.x, client_input_data.y, client_input_data.z,
              client_input_data.w);
-    ESP_LOGI(
-        TAG,
-        "Xip=%.2f, Yip=%.2f, Zip=%.2f, Wip=%.2f, Xfp=%.2f, Yfp=%.2f, "
-        "Zfp=%.2f, Wfp=%.2f, Hp=%.2f",
-        client_input_data.xip, client_input_data.yip, client_input_data.zip,
-        client_input_data.wip, client_input_data.xfp, client_input_data.yfp,
-        client_input_data.zfp, client_input_data.wfp, client_input_data.hp);
+    ESP_LOGI(TAG,
+             "Xip=%.2f, Yip=%.2f, Zip=%.2f, Wip=%.2f, Xfp=%.2f, Yfp=%.2f, "
+             "Zfp=%.2f, Wfp=%.2f, Hp=%.2f, cp= %.2f",
+             client_input_data.xip, client_input_data.yip,
+             client_input_data.zip, client_input_data.wip,
+             client_input_data.xfp, client_input_data.yfp,
+             client_input_data.zfp, client_input_data.wfp, client_input_data.hp,
+             client_input_data.cp);
     ESP_LOGI(TAG, "Kinematics: dir=%d, inv=%d, pap=%d",
              client_input_data.dir_kinematics_on,
              client_input_data.inv_kinematics_on,
@@ -1260,7 +1265,7 @@ void update_target_positions() {
           motor_y.control_vars->encoder_target_pos;
 
       motor_a.control_vars->encoder_target_pos =
-          client_input_data.theta4 *
+          -1 * client_input_data.theta4 *
           motor_a.control_vars->ref_encoder->encoder_resolution / 360 *
           motor_a.control_vars->ref_encoder->gear_ratio;
 
@@ -1497,6 +1502,7 @@ void print_system_output_data(system_output_data *data) {
   ESP_LOGI(TAG, "zfp: %2f", client_input_data.zfp);
   ESP_LOGI(TAG, "wfp: %2f", client_input_data.wfp);
   ESP_LOGI(TAG, "hp: %2f", client_input_data.hp);
+  ESP_LOGI(TAG, "cp: %2f", client_input_data.cp);
 }
 
 // TODO: make this the only loop for readings
@@ -1524,7 +1530,7 @@ void init_scara() {
   /* xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL); */
 
   xTaskCreate(loop_scara_readings_2, "testreadings", 4096, NULL, 5, NULL);
-  /* calibration_initialization_task(); */
+  calibration_initialization_task();
 
   /* calculate_inverse_kinematics_2(0.10, 0.10, 0.10, &inv_kin_results_t); */
   /* vTaskDelay(pdMS_TO_TICKS(5000)); */
