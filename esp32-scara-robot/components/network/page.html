@@ -610,6 +610,13 @@
               </div>
             </div>
           </div>
+          <div class="parameter-group">
+            <h4>Configuration Options</h4>
+            <div class="checkbox-item">
+              <input type="checkbox" id="elbow_up">
+              <label for="elbow_up">Elbow Up</label>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -683,6 +690,13 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+        <div class="parameter-group">
+          <h4>Configuration Options</h4>
+          <div class="checkbox-item">
+            <input type="checkbox" id="elbow_up">
+            <label for="elbow_up">Elbow Up</label>
           </div>
         </div>
       </div>
@@ -770,6 +784,7 @@
       document.getElementById('wfp').value = '0';
       document.getElementById('hp').value = '0';
       document.getElementById('cp').value = '0';
+      document.getElementById('elbow_up').checked = false;
       document.getElementById('dir_kinematics_on').checked = false;
       document.getElementById('inv_kinematics_on').checked = false;
       document.getElementById('pick_and_place_on').checked = false;
@@ -803,6 +818,7 @@
         wfp: parseFloat(document.getElementById('wfp').value),
         hp: parseFloat(document.getElementById('hp').value),
         cp: parseFloat(document.getElementById('cp').value),
+        elbow_up: document.getElementById('elbow_up').checked ? 1 : 0,
         dir_kinematics_on: document.getElementById('dir_kinematics_on').checked ? 1 : 0,
         inv_kinematics_on: document.getElementById('inv_kinematics_on').checked ? 1 : 0,
         pick_and_place_on: document.getElementById('pick_and_place_on').checked ? 1 : 0
@@ -910,7 +926,7 @@
               <span class="data-value">${data.theta4 || '0.0'}</span>
             </div>
             <div class="data-row">
-              <span class="data-label">θ5 (°)</span>
+              <span class="data-label">Claw (%)</span>
               <span class="data-value">${data.theta5 || '0.0'}</span>
             </div>
           </div>

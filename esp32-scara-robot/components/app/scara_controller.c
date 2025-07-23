@@ -53,6 +53,7 @@ user_input_data client_input_data = {
     .wfp = 0,
     .hp = 0,
     .cp = 0,
+    .elbow_up = 0,
 };
 
 system_output_data system_output_data_values = {
@@ -275,6 +276,9 @@ static esp_err_t control_post_handler(httpd_req_t *req) {
     if ((item = cJSON_GetObjectItem(json, "pick_and_place_on")) != NULL) {
       client_input_data.pick_and_place_on = (int)cJSON_GetNumberValue(item);
     }
+    if ((item = cJSON_GetObjectItem(json, "elbow_up")) != NULL) {
+      client_input_data.elbow_up = (int)cJSON_GetNumberValue(item);
+    }
 
     xSemaphoreGive(g_user_input_mutex);
 
@@ -295,10 +299,10 @@ static esp_err_t control_post_handler(httpd_req_t *req) {
              client_input_data.xfp, client_input_data.yfp,
              client_input_data.zfp, client_input_data.wfp, client_input_data.hp,
              client_input_data.cp);
-    ESP_LOGI(TAG, "Kinematics: dir=%d, inv=%d, pap=%d",
+    ESP_LOGI(TAG, "Kinematics: dir=%d, inv=%d, pap=%d, elbow_up=%d",
              client_input_data.dir_kinematics_on,
              client_input_data.inv_kinematics_on,
-             client_input_data.pick_and_place_on);
+             client_input_data.pick_and_place_on, client_input_data.elbow_up);
   }
 
   cJSON_Delete(json);
@@ -1237,13 +1241,16 @@ typedef struct {
   float theta2_2;
   float theta3_1;
   float theta3_2;
+  float w_1;
+  float w_2;
 } inv_kin_results;
 
 inv_kin_results inv_kin_results_t;
 user_input_data current_input;
 
-void calculate_inverse_kinematics_2(float x, float y, float z,
-                                    inv_kin_results *results);
+void calculate_inverse_kinematics(float x, float y, float z, float w,
+                                  inv_kin_results *results);
+
 void update_target_positions() {
   while (1) {
     // direct kinematics is active
@@ -1273,13 +1280,15 @@ void update_target_positions() {
           client_input_data.theta5 *
           motor_b.control_vars->ref_encoder->encoder_resolution / 360 *
           motor_b.control_vars->ref_encoder->gear_ratio;
+
       vTaskDelay(1000 / portTICK_PERIOD_MS);
 
       // inverse kinematics is on
     } else if (client_input_data.inv_kinematics_on &&
                !client_input_data.dir_kinematics_on) {
-      calculate_inverse_kinematics_2(client_input_data.x, client_input_data.y,
-                                     client_input_data.z, &inv_kin_results_t);
+      calculate_inverse_kinematics(client_input_data.x, client_input_data.y,
+                                   client_input_data.z, client_input_data.w,
+                                   &inv_kin_results_t);
       /* ESP_LOGI("client_input_data", "x: %.2f", client_input_data.x); */
       /* ESP_LOGI("client_input_data", "y: %.2f", client_input_data.y); */
       /* ESP_LOGI("client_input_data", "z: %.2f", client_input_data.z); */
@@ -1359,8 +1368,8 @@ bool is_point_reachable(float x, float y, float z) {
   return (result);
 }
 
-void calculate_inverse_kinematics_2(float x, float y, float z,
-                                    inv_kin_results *results) {
+void calculate_inverse_kinematics(float x, float y, float z, float w,
+                                  inv_kin_results *results) {
 
   // Calculate r2 - distance from second joint to target in XY plane
   float r2 = sqrt(pow(x - A1_DIM, 2) + pow(y, 2));
@@ -1422,6 +1431,8 @@ void calculate_inverse_kinematics_2(float x, float y, float z,
 
   // Set d1 (prismatic joint for Z-axis)
   results->d1 = z;
+  results->w_1 = w + results->theta2_1 + results->theta3_1;
+  results->w_2 = w + results->theta2_2 + results->theta3_2;
 
   /* ESP_LOGI("calculate_inverse_kinematics", "beta3: %.2f", beta3); */
   /* ESP_LOGI("calculate_inverse_kinematics", "phi: %.2f", phi); */

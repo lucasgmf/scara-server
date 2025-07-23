@@ -46,6 +46,7 @@ typedef struct {
   float wfp;
   float hp;
   float cp;
+  int elbow_up;
 } user_input_data;
 
 typedef struct {
