@@ -321,7 +321,7 @@ static esp_err_t output_get_handler(httpd_req_t *req) {
   if (xSemaphoreTake(g_system_output_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
     memcpy(&local_output, &system_output_data_values,
            sizeof(system_output_data));
-    ESP_LOGI(TAG, "Sending output!");
+    /* ESP_LOGI(TAG, "Sending output!"); */
     xSemaphoreGive(g_system_output_mutex);
   } else {
     httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR,
@@ -400,7 +400,6 @@ static httpd_handle_t start_webserver(void) {
 }
 
 void update_system_output_data(system_output_data *new_data) {
-  ESP_LOGI("update_system_output_data", "updading data!");
   if (g_system_output_mutex &&
       xSemaphoreTake(g_system_output_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
     memcpy(&system_output_data_values, new_data, sizeof(system_output_data));
@@ -650,8 +649,8 @@ static encoder_t encoder_2 = {
     .current_reading = 0,
     .accumulated_steps = 0,
     .is_inverted = 1,
-    .gear_ratio = 1,
-    .test_offset = 706,
+    .gear_ratio = 0.96,
+    .test_offset = 0,
     .is_calibrated = false,
     .switch_n = &switch_1,
     .angle_degrees = 0,
@@ -676,7 +675,7 @@ static encoder_t encoder_3 = {
     .accumulated_steps = 0,
     .is_inverted = 1,
     .gear_ratio = 1,
-    .test_offset = 706,
+    .test_offset = 0,
     .is_calibrated = false,
     /* .switch_n = &switch_1, */
     .angle_degrees = 0,
@@ -1237,12 +1236,12 @@ void loop_scara_readings() {
 
 typedef struct {
   float d1;
-  float theta2_1;
-  float theta2_2;
-  float theta3_1;
-  float theta3_2;
-  float w_1;
-  float w_2;
+  float theta2_elbow_down;
+  float theta2_elbow_up;
+  float theta3_elbow_down;
+  float theta3_elbow_up;
+  float w_elbow_down;
+  float w_elbow_up;
 } inv_kin_results;
 
 inv_kin_results inv_kin_results_t;
@@ -1289,34 +1288,50 @@ void update_target_positions() {
       calculate_inverse_kinematics(client_input_data.x, client_input_data.y,
                                    client_input_data.z, client_input_data.w,
                                    &inv_kin_results_t);
-      /* ESP_LOGI("client_input_data", "x: %.2f", client_input_data.x); */
-      /* ESP_LOGI("client_input_data", "y: %.2f", client_input_data.y); */
-      /* ESP_LOGI("client_input_data", "z: %.2f", client_input_data.z); */
-      /* ESP_LOGI("client_input_data", "w: %.2f", client_input_data.w); */
 
       motor_move_to_position(&motor_x, 6600 * inv_kin_results_t.d1,
                              motor_x.pwm_vars->max_freq);
 
-      motor_y.control_vars->encoder_target_pos =
-          inv_kin_results_t.theta2_1 * 180 / M_PI * -1 *
-          motor_y.control_vars->ref_encoder->encoder_resolution / 360 *
-          motor_y.control_vars->ref_encoder->gear_ratio;
+      if (client_input_data.elbow_up) {
+        motor_y.control_vars->encoder_target_pos =
+            inv_kin_results_t.theta2_elbow_up * 180 / M_PI * -1 *
+            motor_y.control_vars->ref_encoder->encoder_resolution / 360 *
+            motor_y.control_vars->ref_encoder->gear_ratio;
 
-      motor_z.control_vars->encoder_target_pos =
-          inv_kin_results_t.theta3_1 *
-              motor_z.control_vars->ref_encoder->encoder_resolution / 360 *
-              motor_z.control_vars->ref_encoder->gear_ratio -
-          motor_y.control_vars->encoder_target_pos;
+        motor_z.control_vars->encoder_target_pos =
+            inv_kin_results_t.theta3_elbow_up * 180 / M_PI * -1 *
+                motor_z.control_vars->ref_encoder->encoder_resolution / 360 *
+                motor_z.control_vars->ref_encoder->gear_ratio -
+            motor_y.control_vars->encoder_target_pos;
 
-      motor_a.control_vars->encoder_target_pos =
-          client_input_data.theta4 *
-          motor_a.control_vars->ref_encoder->encoder_resolution / 360 *
-          motor_a.control_vars->ref_encoder->gear_ratio;
+        motor_a.control_vars->encoder_target_pos =
+            -1 * inv_kin_results_t.w_elbow_up * 180 / M_PI *
+            motor_a.control_vars->ref_encoder->encoder_resolution / 360 *
+            motor_a.control_vars->ref_encoder->gear_ratio;
+
+      } else if (!client_input_data.elbow_up) {
+        motor_y.control_vars->encoder_target_pos =
+            inv_kin_results_t.theta2_elbow_down * 180 / M_PI * -1 *
+            motor_y.control_vars->ref_encoder->encoder_resolution / 360 *
+            motor_y.control_vars->ref_encoder->gear_ratio;
+
+        motor_z.control_vars->encoder_target_pos =
+            inv_kin_results_t.theta3_elbow_down * 180 / M_PI * -1 *
+                motor_z.control_vars->ref_encoder->encoder_resolution / 360 *
+                motor_z.control_vars->ref_encoder->gear_ratio -
+            motor_y.control_vars->encoder_target_pos;
+
+        motor_a.control_vars->encoder_target_pos =
+            -1 * inv_kin_results_t.w_elbow_down * 180 / M_PI *
+            motor_a.control_vars->ref_encoder->encoder_resolution / 360 *
+            motor_a.control_vars->ref_encoder->gear_ratio;
+      }
 
       motor_b.control_vars->encoder_target_pos =
-          client_input_data.theta5 *
+          client_input_data.cp *
           motor_b.control_vars->ref_encoder->encoder_resolution / 360 *
           motor_b.control_vars->ref_encoder->gear_ratio;
+
       vTaskDelay(1000 / portTICK_PERIOD_MS);
 
     } else {
@@ -1382,13 +1397,6 @@ void calculate_inverse_kinematics(float x, float y, float z, float w,
     ESP_LOGE("calculate_inverse_kinematics",
              "Target unreachable! r2=%.2f, min=%.2f, max=%.2f", r2, min_reach,
              max_reach);
-    // TODO: return to default position
-    /* results->d1 = NAN; */
-    /* results->theta2_1 = NAN; */
-    /* results->theta2_2 = NAN; */
-    /* results->theta3_1 = NAN; */
-    /* results->theta3_2 = NAN; */
-
     return;
   }
 
@@ -1403,18 +1411,8 @@ void calculate_inverse_kinematics(float x, float y, float z, float w,
   float beta2 = acos(cos_beta2);
 
   // Calculate theta3 (elbow angle)
-  results->theta3_1 = M_PI - beta2;    // Elbow up configuration
-  results->theta3_2 = -(M_PI - beta2); // Elbow down configuration
-
-  /* ESP_LOGI("calculate_inverse_kinematics", "starting debug prints!"); */
-  /* ESP_LOGI("calculate_inverse_kinematics", "x: %.2f", x); */
-  /* ESP_LOGI("calculate_inverse_kinematics", "y: %.2f", y); */
-  /* ESP_LOGI("calculate_inverse_kinematics", "z: %.2f", z); */
-  /* ESP_LOGI("calculate_inverse_kinematics", "r2: %.2f", r2); */
-  /* ESP_LOGI("calculate_inverse_kinematics", "cos_beta2: %.2f", cos_beta2); */
-  /* ESP_LOGI("calculate_inverse_kinematics", "beta2: %.2f", beta2); */
-  /* ESP_LOGI("theta3_1", "%.2f", results->theta3_1); */
-  /* ESP_LOGI("theta3_2", "%.2f", results->theta3_2); */
+  results->theta3_elbow_up = M_PI - beta2;      // Elbow up configuration
+  results->theta3_elbow_down = -(M_PI - beta2); // Elbow down configuration
 
   // Calculate beta3 (angle to target from first joint)
   float beta3 = atan2(y, x - A1_DIM);
@@ -1426,23 +1424,16 @@ void calculate_inverse_kinematics(float x, float y, float z, float w,
   float phi = acos(cos_phi);
 
   // Calculate theta2 (shoulder angle)
-  results->theta2_1 = beta3 + phi; // For elbow up
-  results->theta2_2 = beta3 - phi; // For elbow down
+  results->theta2_elbow_up = beta3 + phi;   // For elbow up
+  results->theta2_elbow_down = beta3 - phi; // For elbow down
 
   // Set d1 (prismatic joint for Z-axis)
   results->d1 = z;
-  results->w_1 = w + results->theta2_1 + results->theta3_1;
-  results->w_2 = w + results->theta2_2 + results->theta3_2;
+  results->w_elbow_up =
+      w * M_PI / 180 - results->theta2_elbow_up - results->theta3_elbow_down;
 
-  /* ESP_LOGI("calculate_inverse_kinematics", "beta3: %.2f", beta3); */
-  /* ESP_LOGI("calculate_inverse_kinematics", "phi: %.2f", phi); */
-  /* ESP_LOGI("calculate_inverse_kinematics", "theta2_1: %.2f",
-   * results->theta2_1); */
-  /* ESP_LOGI("calculate_inverse_kinematics", "theta2_2: %.2f",
-   * results->theta2_2); */
-  /* ESP_LOGI("calculate_inverse_kinematics", ""); */
-  /* ESP_LOGI("calculate_inverse_kinematics", ""); */
-  /* ESP_LOGI("calculate_inverse_kinematics", ""); */
+  results->w_elbow_down =
+      w * M_PI / 180 - results->theta2_elbow_down - results->theta3_elbow_up;
   return;
 }
 
@@ -1471,7 +1462,7 @@ void update_monitoring_data(system_output_data *data) {
   calculate_direct_kinematics(data->d1, data->theta2, data->theta3,
                               data->theta4, data);
 
-  data->w = data->theta5; // TODO: maybe change this
+  /* data->w = data->theta5; // TODO: maybe change this */
   update_system_output_data(data);
 }
 
@@ -1522,7 +1513,7 @@ void loop_scara_readings_2() {
     update_monitoring_data(&system_new_output_data_values);
     get_user_input_data(&client_input_data); // Get web interface input
 
-    print_system_output_data(&system_output_data_values);
+    /* print_system_output_data(&system_output_data_values); */
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
@@ -1533,6 +1524,7 @@ void init_scara() {
   switch_initialization_task();
   encoder_initialization_task();
   motor_initialization_task();
+
   // BUG: broken :C
   /* hx711_initialization_func(); */
 
@@ -1543,8 +1535,6 @@ void init_scara() {
   xTaskCreate(loop_scara_readings_2, "testreadings", 4096, NULL, 5, NULL);
   calibration_initialization_task();
 
-  /* calculate_inverse_kinematics_2(0.10, 0.10, 0.10, &inv_kin_results_t); */
-  /* vTaskDelay(pdMS_TO_TICKS(5000)); */
   xTaskCreate(update_target_positions, "update target positions", 4096, NULL, 5,
               NULL);
   ESP_LOGI(TAG, "init_scara completed");
