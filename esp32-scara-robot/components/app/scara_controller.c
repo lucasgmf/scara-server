@@ -826,7 +826,7 @@ motor_mcpwm_vars mcpwm_vars_b = {
 };
 motor_pwm_vars_t pwm_vars_x = {
     .step_count = 0,
-    .max_freq = 1200,
+    .max_freq = 2500,
     .min_freq = 0,
     .max_accel = 3000,
     .current_freq_hz = 0,
@@ -836,9 +836,9 @@ motor_pwm_vars_t pwm_vars_x = {
 
 motor_pwm_vars_t pwm_vars_y = {
     .step_count = 0,
-    .max_freq = 1000,
+    .max_freq = 1000.0,
     .min_freq = 0,
-    .max_accel = 3000,
+    .max_accel = 3000.0,
     .current_freq_hz = 0,
     .target_freq_hz = 0,
     .dir_is_reversed = true,
@@ -1060,16 +1060,14 @@ void calibration_initialization_task() {
   motor_a.control_vars->encoder_target_pos = 0;
   motor_b.control_vars->encoder_target_pos = 0;
 
-  motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq);
+  motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq / 2);
   while (!motor_x.control_vars->ref_switch->is_pressed) {
     ESP_LOGI("calibration_initialization_task", "calibrating motor_x");
     vTaskDelay(20);
   }
   motor_set_target_frequency(&motor_x, 0);
-  /* motor_move_steps(&motor_x, 6400 * 10 / 6 * 5, motor_x.pwm_vars->max_freq);
-   */
-  motor_set_current_position(&motor_x, 0); // Start at position 0
-  motor_move_to_position(&motor_x, 6600, motor_x.pwm_vars->max_freq);
+  motor_set_current_position(&motor_x, 0);
+  motor_move_to_position(&motor_x, 6600 * 5, motor_x.pwm_vars->max_freq);
 
   motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq / 4);
   motor_y.pwm_vars->target_freq_hz = motor_y.pwm_vars->max_freq / 4;
@@ -1213,27 +1211,6 @@ void hx711_initialization_func() {
   return;
 }
 
-void loop_scara_readings() {
-  while (1) {
-    ESP_LOGI("switch_0", "is pressed: %d", switch_0.is_pressed);
-    ESP_LOGI("switch_1", "is pressed: %d", switch_1.is_pressed);
-
-    ESP_LOGI(encoder_0.label, "value deg: %f", encoder_0.angle_degrees);
-    ESP_LOGI(encoder_1.label, "value deg: %f", encoder_1.angle_degrees);
-    ESP_LOGI(encoder_2.label, "value deg: %f", encoder_2.angle_degrees);
-    ESP_LOGI(encoder_3.label, "value deg: %f", encoder_3.angle_degrees);
-
-    ESP_LOGI(encoder_0.label, "steps: %d", encoder_0.accumulated_steps);
-    ESP_LOGI(encoder_1.label, "steps: %d", encoder_1.accumulated_steps);
-    ESP_LOGI(encoder_2.label, "steps: %d", encoder_2.accumulated_steps);
-    ESP_LOGI(encoder_3.label, "steps: %d", encoder_3.accumulated_steps);
-
-    ESP_LOGI("", "");
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-  }
-  return;
-}
-
 typedef struct {
   float d1;
   float theta2_elbow_down;
@@ -1256,7 +1233,8 @@ void update_target_positions() {
     if (client_input_data.dir_kinematics_on &&
         !client_input_data.inv_kinematics_on) {
 
-      motor_move_to_position(&motor_x, 6600 * client_input_data.d1,
+      motor_move_to_position(&motor_x,
+                             6600 * (3700 - client_input_data.d1) / 100,
                              motor_x.pwm_vars->max_freq);
 
       motor_y.control_vars->encoder_target_pos =
@@ -1289,8 +1267,9 @@ void update_target_positions() {
                                    client_input_data.z, client_input_data.w,
                                    &inv_kin_results_t);
 
-      motor_move_to_position(&motor_x, 6600 * inv_kin_results_t.d1,
-                             motor_x.pwm_vars->max_freq);
+      /* motor_move_to_position(&motor_x, */
+      /*                        6600 * (3700 - inv_kin_results_t.d1) / 100, */
+      /*                        motor_x.pwm_vars->max_freq); */
 
       if (client_input_data.elbow_up) {
         motor_y.control_vars->encoder_target_pos =
@@ -1427,8 +1406,10 @@ void calculate_inverse_kinematics(float x, float y, float z, float w,
   results->theta2_elbow_up = beta3 + phi;   // For elbow up
   results->theta2_elbow_down = beta3 - phi; // For elbow down
 
-  // Set d1 (prismatic joint for Z-axis)
+  // Set d1 (prismatic joint for Z-axis) (mm)
+  /* results->d1 = (-3700 - (z + D3_VAL - D4_VAL)); */
   results->d1 = z;
+
   results->w_elbow_up =
       w * M_PI / 180 - results->theta2_elbow_up - results->theta3_elbow_down;
 
@@ -1450,7 +1431,10 @@ void update_monitoring_data(system_output_data *data) {
   data->switch1 = switch_1.is_pressed;
 
   // variable parameters
-  data->d1 = 0;
+  // 45 - 8 -> Initial pos
+  // d1 in (mm)
+
+  data->d1 = 3700 - (motor_x.pwm_vars->current_position / 100.0) - 500;
 
   // BUG: broken
   data->theta2 = -1 * encoder_get_angle_degrees(&encoder_0);
@@ -1506,6 +1490,38 @@ void print_system_output_data(system_output_data *data) {
   ESP_LOGI(TAG, "hp: %2f", client_input_data.hp);
   ESP_LOGI(TAG, "cp: %2f", client_input_data.cp);
 }
+void print_tests() {
+  /* ESP_LOGI( */
+  /*     TAG, "%.5f, %.5f", */
+  /*     motor_y.control_vars->encoder_target_pos - encoder_0.accumulated_steps,
+   */
+  /*     motor_y.control_vars->encoder_target_pos); */
+  /* ESP_LOGI(TAG, "%.5f, %.5f", */
+  /*          -1 * (motor_y.control_vars->encoder_target_pos - */
+  /*                encoder_0.accumulated_steps) + */
+  /*              motor_y.control_vars->encoder_target_pos, */
+  /*          motor_y.control_vars->encoder_target_pos); */
+  ESP_LOGI(TAG, "%.5f, %.5f, %.5f, %.5f, %.5f, %.5f",
+           -1 * (motor_y.control_vars->encoder_target_pos -
+                 encoder_0.accumulated_steps) +
+               motor_y.control_vars->encoder_target_pos,
+           motor_y.control_vars->encoder_target_pos,
+
+           -1 * (motor_z.control_vars->encoder_target_pos -
+                 encoder_1.accumulated_steps) +
+               motor_z.control_vars->encoder_target_pos,
+           motor_z.control_vars->encoder_target_pos,
+
+           -1 * (motor_a.control_vars->encoder_target_pos -
+                 encoder_2.accumulated_steps) +
+               motor_a.control_vars->encoder_target_pos,
+           motor_a.control_vars->encoder_target_pos,
+
+           -1 * (motor_b.control_vars->encoder_target_pos -
+                 encoder_3.accumulated_steps) +
+               motor_b.control_vars->encoder_target_pos,
+           motor_b.control_vars->encoder_target_pos);
+}
 
 // TODO: make this the only loop for readings
 void loop_scara_readings_2() {
@@ -1515,6 +1531,13 @@ void loop_scara_readings_2() {
 
     /* print_system_output_data(&system_output_data_values); */
     vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
+}
+
+void print_tests_task() {
+  while (1) {
+    print_tests();
+    vTaskDelay(75 / portTICK_PERIOD_MS);
   }
 }
 
@@ -1535,6 +1558,7 @@ void init_scara() {
   xTaskCreate(loop_scara_readings_2, "testreadings", 4096, NULL, 5, NULL);
   calibration_initialization_task();
 
+  xTaskCreate(print_tests_task, "print tests", 4096, NULL, 5, NULL);
   xTaskCreate(update_target_positions, "update target positions", 4096, NULL, 5,
               NULL);
   ESP_LOGI(TAG, "init_scara completed");
