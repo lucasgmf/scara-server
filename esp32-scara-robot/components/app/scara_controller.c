@@ -1422,6 +1422,8 @@ void update_monitoring_data(system_output_data *data) {
   data->horizontal_load = hx711_0.raw_read;
   data->vertical_load = hx711_1.raw_read;
 
+  /* data->horizontal_load = 2; */
+  /* data->vertical_load = 97; */
   data->encoder0 = encoder_0.accumulated_steps;
   data->encoder1 = encoder_1.accumulated_steps;
   data->encoder2 = encoder_2.accumulated_steps;
@@ -1435,12 +1437,13 @@ void update_monitoring_data(system_output_data *data) {
   // d1 in (mm)
 
   data->d1 = 3700 - (motor_x.pwm_vars->current_position / 100.0) - 500;
+  data->d1 = data->d1 / 10;
 
   // BUG: broken
   data->theta2 = -1 * encoder_get_angle_degrees(&encoder_0);
   data->theta3 = encoder_get_angle_degrees(&encoder_1) - data->theta2;
   data->theta4 = encoder_get_angle_degrees(&encoder_2);
-  data->theta5 = encoder_get_angle_degrees(&encoder_3);
+  data->theta5 = -1 * encoder_get_angle_degrees(&encoder_3);
 
   // update x, y, z with direct kinematics
   calculate_direct_kinematics(data->d1, data->theta2, data->theta3,
@@ -1556,10 +1559,10 @@ void init_scara() {
   /* xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL); */
 
   xTaskCreate(loop_scara_readings_2, "testreadings", 4096, NULL, 5, NULL);
-  calibration_initialization_task();
-
-  xTaskCreate(print_tests_task, "print tests", 4096, NULL, 5, NULL);
   xTaskCreate(update_target_positions, "update target positions", 4096, NULL, 5,
               NULL);
+  calibration_initialization_task();
+
+  /* xTaskCreate(print_tests_task, "print tests", 4096, NULL, 5, NULL); */
   ESP_LOGI(TAG, "init_scara completed");
 }
