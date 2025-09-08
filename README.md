@@ -1,9 +1,7 @@
 # 4-DOF Educational SCARA Manipulator
-
 An affordable, open-source robotic manipulator designed for educational environments, featuring four degrees of freedom and an integrated gripper system. Master's thesis in Electrical and Computer Engineering at the [Faculty of Engineering, University of Porto](https://www.up.pt/feup/en/).
 
 ## Dependencies
-
 This project requires the following dependencies:
 
 - [Python](https://www.python.org/)
@@ -17,12 +15,10 @@ Make sure to install the ESP-IDF toolchain and source it before building:
 ```
 
 ## Build & Flash (Makefile)
-
 This project includes a `Makefile` that simplifies the workflow with the ESP-IDF toolchain.  
 Instead of remembering multiple commands, you can just run `make` and it will take care of everything.
 
 ### Targets
-
 - **`build`**  
   - Converts the web page `components/network/page.html` into a C header file (`page_html.h`) using `xxd`.  
     This allows embedding HTML directly into the firmware.  
@@ -51,7 +47,6 @@ Instead of remembering multiple commands, you can just run `make` and it will ta
     will compile, flash, and open the serial monitor in one step.
 
 ### Example workflow
-
 ```bash
 # Build the firmware only
 make build
@@ -67,7 +62,6 @@ make
 ```
 
 ## Internet Connectivity
-
 To enable Wi-Fi connectivity on the ESP32, you need to provide your own network credentials.
 
 1. Open the template file located at:
@@ -95,3 +89,14 @@ Where:
    credentials.h
 
 Do not commit your personal credentials to GitHub ;).
+
+# Kinematics Study
+This repository also contains a directory for studying the kinematics of the SCARA robot.
+
+You can find it here:
+```bash
+kinematics-study/kinematics.ipynb
+```
+Open the Jupyter notebook to explore the mathematical models and simulations of the robot's kinematics.
+
+Tip: To run the notebook, make sure you have Python and Jupyter installed. Or run the notebook directly in [Google Colab](https://colab.google/).
