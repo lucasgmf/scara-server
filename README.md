@@ -100,3 +100,14 @@ kinematics-study/kinematics.ipynb
 Open the Jupyter notebook to explore the mathematical models and simulations of the robot's kinematics.
 
 Tip: To run the notebook, make sure you have Python and Jupyter installed. Or run the notebook directly in [Google Colab](https://colab.google/).
+
+# SCARA Robot Schematic
+The electrical schematic of the SCARA robot is included in this repository.
+
+Files included:
+1. `schematic/scara_robot.json`  
+   - This is the EasyEDA project file.  
+   - You can open it directly in [EasyEDA](https://easyeda.com) to view, edit, or export the schematic.
+
+2. `schematic/scara_robot.pdf`  
+   - A static PDF version of the schematic for easy reference or printing.
