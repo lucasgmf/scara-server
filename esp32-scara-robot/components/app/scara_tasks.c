@@ -9,7 +9,6 @@
 
 static const char *TAG = "scara_tasks";
 
-
 #define MAX_ENCODER_VAL 4096 // 12-bit encoder
 #define HALF_ENCODER_VAL (MAX_ENCODER_VAL / 2)
 

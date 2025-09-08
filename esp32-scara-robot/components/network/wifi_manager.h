@@ -35,6 +35,18 @@ typedef struct {
   float y;
   float z;
   float w;
+  int pick_and_place_on;
+  float xip;
+  float yip;
+  float zip;
+  float wip;
+  float xfp;
+  float yfp;
+  float zfp;
+  float wfp;
+  float hp;
+  float cp;
+  int elbow_up;
 } user_input_data;
 
 typedef struct {

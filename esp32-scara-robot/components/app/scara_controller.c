@@ -6,6 +6,13 @@ static const char *TAG = "scara_controller";
 ////// network/wifi_manager //////
 //////////////////////////////////
 
+#include "cJSON.h"
+#include "esp_http_server.h"
+
+#ifndef MIN
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
+
 wifi_config_t wifi_config_a = {
     .sta =
         {
@@ -35,9 +42,59 @@ user_input_data client_input_data = {
     .w = 0,
     .dir_kinematics_on = 0,
     .inv_kinematics_on = 0,
+    .pick_and_place_on = 0,
+    .xip = 0,
+    .yip = 0,
+    .zip = 0,
+    .wip = 0,
+    .xfp = 0,
+    .yfp = 0,
+    .zfp = 0,
+    .wfp = 0,
+    .hp = 0,
+    .cp = 0,
+    .elbow_up = 0,
 };
 
-system_output_data system_output_data_values = {};
+system_output_data system_output_data_values = {
+    .horizontal_load = 0.0f,
+    .vertical_load = 0.0f,
+    .encoder0 = 0.0f,
+    .encoder1 = 0.0f,
+    .encoder2 = 0.0f,
+    .encoder3 = 0.0f,
+    .switch0 = 0,
+    .switch1 = 0,
+    .x = 0.0f,
+    .y = 0.0f,
+    .z = 0.0f,
+    .w = 0.0f,
+    .d1 = 0.0f,
+    .theta2 = 0.0f,
+    .theta3 = 0.0f,
+    .theta4 = 0.0f,
+    .theta5 = 0.0f,
+};
+
+system_output_data system_new_output_data_values = {
+    .horizontal_load = 0.0f,
+    .vertical_load = 0.0f,
+    .encoder0 = 0.0f,
+    .encoder1 = 0.0f,
+    .encoder2 = 0.0f,
+    .encoder3 = 0.0f,
+    .switch0 = 0,
+    .switch1 = 0,
+    .x = 0.0f,
+    .y = 0.0f,
+    .z = 0.0f,
+    .w = 0.0f,
+    .d1 = 0.0f,
+    .theta2 = 0.0f,
+    .theta3 = 0.0f,
+    .theta4 = 0.0f,
+    .theta5 = 0.0f,
+};
 
 network_configuration esp_net_conf = {
     .wifi_config = &wifi_config_a,
@@ -90,14 +147,6 @@ bool is_client_connected() {
   return connected;
 }
 
-// Function to update system output data (call this from your main control loop)
-void update_system_output_data(system_output_data *new_data) {
-  if (xSemaphoreTake(g_system_output_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
-    memcpy(&system_output_data_values, new_data, sizeof(system_output_data));
-    xSemaphoreGive(g_system_output_mutex);
-  }
-}
-
 bool handle_error(bool condition, const char *message, int sock_to_close) {
   if (condition) {
     ESP_LOGE(TAG, "%s: errno %d", message, errno);
@@ -109,200 +158,269 @@ bool handle_error(bool condition, const char *message, int sock_to_close) {
   }
   return false;
 }
+#include "cJSON.h"
+#include "esp_http_server.h"
+#include "esp_log.h"
 
-void tcp_server_task(void *arg) {
-  network_configuration *net_conf = (network_configuration *)arg;
-  if (net_conf == NULL) {
-    ESP_LOGE(TAG, "Parameter is null, aborting.");
-    vTaskDelete(NULL);
-    return;
-  }
+static SemaphoreHandle_t g_user_input_mutex = NULL;
 
-  char rx_buffer[net_conf->rx_buffer_size];
-  char addr_str[net_conf->addr_str_size];
+#include "page_html.h"
 
-  struct sockaddr_in dest_addr = {
-      .sin_addr.s_addr = htonl(INADDR_ANY),
-      .sin_family = AF_INET,
-      .sin_port = htons(net_conf->port),
-  };
-
-  int listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-  if (handle_error(listen_sock < 0, "Unable to create socket", -1))
-    return;
-
-  // Set socket options for reuse
-  int opt = 1;
-  setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
-  ESP_LOGI(TAG, "Socket created");
-
-  int err = bind(listen_sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
-  if (handle_error(err != 0, "Socket bind failed", listen_sock))
-    return;
-
-  ESP_LOGI(TAG, "Socket bound, port %d", net_conf->port);
-
-  err = listen(listen_sock, 1);
-  if (handle_error(err != 0, "Listen failed", listen_sock))
-    return;
-
-  while (1) {
-    ESP_LOGI(TAG, "Waiting for connection...");
-
-    struct sockaddr_in6 source_addr;
-    socklen_t addr_len = sizeof(source_addr);
-    int sock = accept(listen_sock, (struct sockaddr *)&source_addr, &addr_len);
-
-    if (sock < 0) {
-      ESP_LOGE(TAG, "Unable to accept connection: errno %d", errno);
-      continue; // Continue listening instead of breaking
-    }
-
-    // Set socket timeout for receive operations
-    struct timeval timeout;
-    timeout.tv_sec = 5; // 5 second timeout
-    timeout.tv_usec = 0;
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-
-    // Set the client socket for the sender task
-    set_client_socket(sock);
-
-    inet_ntoa_r(((struct sockaddr_in *)&source_addr)->sin_addr, addr_str,
-                sizeof(addr_str) - 1);
-    ESP_LOGI(TAG, "Connection from %s", addr_str);
-
-    // Handle client communication
-    while (1) {
-      int len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
-
-      if (len < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-          ESP_LOGD(TAG, "Receive timeout, continuing...");
-          continue; // Timeout, continue listening
-        } else {
-          ESP_LOGE(TAG, "recv failed: errno %d", errno);
-          break;
-        }
-      } else if (len == 0) {
-        ESP_LOGI(TAG, "Connection closed by client");
-        break;
-      } else {
-        rx_buffer[len] = 0;
-        ESP_LOGI(TAG, "Received: %s", rx_buffer);
-
-        // Parse the received data
-        int count = sscanf(
-            rx_buffer, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%d,%d",
-            &net_conf->user_input_data->d1, &net_conf->user_input_data->theta2,
-            &net_conf->user_input_data->theta3,
-            &net_conf->user_input_data->theta4,
-            &net_conf->user_input_data->theta5, &net_conf->user_input_data->x,
-            &net_conf->user_input_data->y, &net_conf->user_input_data->z,
-            &net_conf->user_input_data->w,
-            &net_conf->user_input_data->dir_kinematics_on,
-            &net_conf->user_input_data->inv_kinematics_on);
-
-        if (count == 11) {
-          ESP_LOGI(TAG, "Parsed values:");
-          ESP_LOGI(TAG,
-                   "Float values: %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, "
-                   "%.2f, %.2f",
-                   net_conf->user_input_data->d1,
-                   net_conf->user_input_data->theta2,
-                   net_conf->user_input_data->theta3,
-                   net_conf->user_input_data->theta4,
-                   net_conf->user_input_data->theta5,
-                   net_conf->user_input_data->x, net_conf->user_input_data->y,
-                   net_conf->user_input_data->z, net_conf->user_input_data->w);
-          ESP_LOGI(
-              TAG, "Boolean values: %s, %s",
-              net_conf->user_input_data->dir_kinematics_on ? "true" : "false",
-              net_conf->user_input_data->inv_kinematics_on ? "true" : "false");
-        } else {
-          ESP_LOGW(TAG,
-                   "Failed to parse input data. Expected 11 values, got %d. "
-                   "Received: %s",
-                   count, rx_buffer);
-        }
-      }
-    }
-
-    // Clear client socket when connection closes
-    set_client_socket(-1);
-
-    ESP_LOGI(TAG, "Closing connection");
-    shutdown(sock, SHUT_RDWR);
-    close(sock);
-  }
-
-  close(listen_sock);
-  vTaskDelete(NULL);
+// HTTP GET handler for the main page
+static esp_err_t root_get_handler(httpd_req_t *req) {
+  httpd_resp_set_type(req, "text/html");
+  httpd_resp_send(req, (const char *)components_network_page_html,
+                  components_network_page_html_len);
+  return ESP_OK;
 }
 
-// Improved TCP sender task that sends every 1 second
-void tcp_sender_task(void *arg) {
-  char tx_buffer[512];
+// HTTP POST handler for control data
+static esp_err_t control_post_handler(httpd_req_t *req) {
+  char buf[512];
+  int ret, remaining = req->content_len;
+
+  if (remaining >= sizeof(buf)) {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Content too large");
+    return ESP_FAIL;
+  }
+
+  ret = httpd_req_recv(req, buf, MIN(remaining, sizeof(buf)));
+  if (ret <= 0) {
+    if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+      httpd_resp_send_err(req, HTTPD_408_REQ_TIMEOUT, "Request timeout");
+    }
+    return ESP_FAIL;
+  }
+
+  buf[ret] = '\0';
+
+  // Parse JSON data
+  cJSON *json = cJSON_Parse(buf);
+  if (json == NULL) {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+    return ESP_FAIL;
+  }
+
+  // Create mutex if not exists
+  if (g_user_input_mutex == NULL) {
+    g_user_input_mutex = xSemaphoreCreateMutex();
+  }
+
+  // Update user input data with mutex protection
+  if (xSemaphoreTake(g_user_input_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+    cJSON *item;
+
+    if ((item = cJSON_GetObjectItem(json, "d1")) != NULL) {
+      client_input_data.d1 = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "theta2")) != NULL) {
+      client_input_data.theta2 = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "theta3")) != NULL) {
+      client_input_data.theta3 = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "theta4")) != NULL) {
+      client_input_data.theta4 = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "theta5")) != NULL) {
+      client_input_data.theta5 = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "x")) != NULL) {
+      client_input_data.x = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "y")) != NULL) {
+      client_input_data.y = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "z")) != NULL) {
+      client_input_data.z = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "w")) != NULL) {
+      client_input_data.w = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "xip")) != NULL) {
+      client_input_data.xip = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "yip")) != NULL) {
+      client_input_data.yip = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "zip")) != NULL) {
+      client_input_data.zip = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "wip")) != NULL) {
+      client_input_data.wip = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "xfp")) != NULL) {
+      client_input_data.xfp = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "yfp")) != NULL) {
+      client_input_data.yfp = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "zfp")) != NULL) {
+      client_input_data.zfp = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "wfp")) != NULL) {
+      client_input_data.wfp = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "hp")) != NULL) {
+      client_input_data.hp = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "cp")) != NULL) {
+      client_input_data.cp = (float)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "dir_kinematics_on")) != NULL) {
+      client_input_data.dir_kinematics_on = (int)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "inv_kinematics_on")) != NULL) {
+      client_input_data.inv_kinematics_on = (int)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "pick_and_place_on")) != NULL) {
+      client_input_data.pick_and_place_on = (int)cJSON_GetNumberValue(item);
+    }
+    if ((item = cJSON_GetObjectItem(json, "elbow_up")) != NULL) {
+      client_input_data.elbow_up = (int)cJSON_GetNumberValue(item);
+    }
+
+    xSemaphoreGive(g_user_input_mutex);
+
+    ESP_LOGI(TAG,
+             "Updated input data: d1=%.2f, theta2=%.2f, theta3=%.2f, "
+             "theta4=%.2f, theta5=%.2f",
+             client_input_data.d1, client_input_data.theta2,
+             client_input_data.theta3, client_input_data.theta4,
+             client_input_data.theta5);
+    ESP_LOGI(TAG, "Position: x=%.2f, y=%.2f, z=%.2f, w=%.2f",
+             client_input_data.x, client_input_data.y, client_input_data.z,
+             client_input_data.w);
+    ESP_LOGI(TAG,
+             "Xip=%.2f, Yip=%.2f, Zip=%.2f, Wip=%.2f, Xfp=%.2f, Yfp=%.2f, "
+             "Zfp=%.2f, Wfp=%.2f, Hp=%.2f, cp= %.2f",
+             client_input_data.xip, client_input_data.yip,
+             client_input_data.zip, client_input_data.wip,
+             client_input_data.xfp, client_input_data.yfp,
+             client_input_data.zfp, client_input_data.wfp, client_input_data.hp,
+             client_input_data.cp);
+    ESP_LOGI(TAG, "Kinematics: dir=%d, inv=%d, pap=%d, elbow_up=%d",
+             client_input_data.dir_kinematics_on,
+             client_input_data.inv_kinematics_on,
+             client_input_data.pick_and_place_on, client_input_data.elbow_up);
+  }
+
+  cJSON_Delete(json);
+
+  // Send success response
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_send(req, "{\"status\":\"success\"}", HTTPD_RESP_USE_STRLEN);
+  return ESP_OK;
+}
+
+// HTTP GET handler for output data
+static esp_err_t output_get_handler(httpd_req_t *req) {
   system_output_data local_output;
-  TickType_t last_wake_time = xTaskGetTickCount();
-  const TickType_t send_period = pdMS_TO_TICKS(1000); // 1 second
 
-  ESP_LOGI(TAG, "TCP sender task started");
+  // Get current system output data with mutex protection
+  if (xSemaphoreTake(g_system_output_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+    memcpy(&local_output, &system_output_data_values,
+           sizeof(system_output_data));
+    /* ESP_LOGI(TAG, "Sending output!"); */
+    xSemaphoreGive(g_system_output_mutex);
+  } else {
+    httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR,
+                        "Failed to get data");
+    return ESP_FAIL;
+  }
 
-  while (1) {
-    // Wait for the next cycle (1 second intervals)
-    vTaskDelayUntil(&last_wake_time, send_period);
+  // Create JSON response
+  char json_buffer[1024];
+  snprintf(json_buffer, sizeof(json_buffer),
+           "{"
+           "\"horizontal_load\":%.3f,"
+           "\"vertical_load\":%.3f,"
+           "\"encoder0\":%.3f,"
+           "\"encoder1\":%.3f,"
+           "\"encoder2\":%.3f,"
+           "\"encoder3\":%.3f,"
+           "\"switch0\":%d,"
+           "\"switch1\":%d,"
+           "\"x\":%.3f,"
+           "\"y\":%.3f,"
+           "\"z\":%.3f,"
+           "\"w\":%.3f,"
+           "\"d1\":%.3f,"
+           "\"theta2\":%.3f,"
+           "\"theta3\":%.3f,"
+           "\"theta4\":%.3f,"
+           "\"theta5\":%.3f"
+           "}",
+           local_output.horizontal_load, local_output.vertical_load,
+           local_output.encoder0, local_output.encoder1, local_output.encoder2,
+           local_output.encoder3, local_output.switch0, local_output.switch1,
+           local_output.x, local_output.y, local_output.z, local_output.w,
+           local_output.d1, local_output.theta2, local_output.theta3,
+           local_output.theta4, local_output.theta5);
 
-    // Check if client is connected
-    if (!is_client_connected()) {
-      ESP_LOGD(TAG, "No client connected, skipping send");
-      continue;
-    }
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_send(req, json_buffer, HTTPD_RESP_USE_STRLEN);
+  return ESP_OK;
+}
 
-    // Get current client socket
-    int client_sock = get_client_socket();
-    if (client_sock < 0) {
-      ESP_LOGD(TAG, "Invalid client socket, skipping send");
-      continue;
-    }
+// URI handlers
+static const httpd_uri_t root = {.uri = "/",
+                                 .method = HTTP_GET,
+                                 .handler = root_get_handler,
+                                 .user_ctx = NULL};
 
-    // Get current system output data
-    if (xSemaphoreTake(g_system_output_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-      memcpy(&local_output, &system_output_data_values,
-             sizeof(system_output_data));
-      xSemaphoreGive(g_system_output_mutex);
+static const httpd_uri_t control_api = {.uri = "/api/control",
+                                        .method = HTTP_POST,
+                                        .handler = control_post_handler,
+                                        .user_ctx = NULL};
 
-      // Format the data as CSV string
-      int len = snprintf(
-          tx_buffer, sizeof(tx_buffer),
-          "%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%."
-          "3f,%.3f,%.3f\n",
-          local_output.horizontal_load, local_output.vertical_load,
-          local_output.encoder0, local_output.encoder1, local_output.encoder2,
-          local_output.encoder3, local_output.switch0, local_output.switch1,
-          local_output.x, local_output.y, local_output.z, local_output.w,
-          local_output.d1, local_output.theta2, local_output.theta3,
-          local_output.theta4, local_output.theta5);
+static const httpd_uri_t output_api = {.uri = "/api/output",
+                                       .method = HTTP_GET,
+                                       .handler = output_get_handler,
+                                       .user_ctx = NULL};
 
-      if (len > 0 && len < sizeof(tx_buffer)) {
-        // Send data to client
-        int err = send(client_sock, tx_buffer, len, MSG_DONTWAIT);
-        if (err < 0) {
-          if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            ESP_LOGW(TAG, "Send would block, client might be slow");
-          } else {
-            ESP_LOGE(TAG, "Error sending data: errno %d", errno);
-            // Don't reset socket here, let the receiver task handle it
-          }
-        } else {
-          ESP_LOGI(TAG, "Sent %d bytes to client", err);
-        }
-      } else {
-        ESP_LOGE(TAG, "Buffer overflow in snprintf");
-      }
-    } else {
-      ESP_LOGW(TAG, "Failed to get system output data mutex");
-    }
+// Function to start the web server
+static httpd_handle_t start_webserver(void) {
+  httpd_handle_t server = NULL;
+  httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+  config.lru_purge_enable = true;
+
+  ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
+  if (httpd_start(&server, &config) == ESP_OK) {
+    ESP_LOGI(TAG, "Registering URI handlers");
+    httpd_register_uri_handler(server, &root);
+    httpd_register_uri_handler(server, &control_api);
+    httpd_register_uri_handler(server, &output_api);
+    ESP_LOGI(TAG, "Registering URI handlers");
+    return server;
+  }
+
+  ESP_LOGI(TAG, "Error starting server!");
+  return NULL;
+}
+
+void update_system_output_data(system_output_data *new_data) {
+  if (g_system_output_mutex &&
+      xSemaphoreTake(g_system_output_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+    memcpy(&system_output_data_values, new_data, sizeof(system_output_data));
+    xSemaphoreGive(g_system_output_mutex);
+  } else {
+    ESP_LOGE(
+        TAG,
+        "Failed to take g_system_output_mutex in update_system_output_data");
+  }
+}
+
+// Function to get current user input data (new function for your control loop)
+void get_user_input_data(user_input_data *data) {
+  if (g_user_input_mutex &&
+      xSemaphoreTake(g_user_input_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+    memcpy(data, &client_input_data, sizeof(user_input_data));
+    xSemaphoreGive(g_user_input_mutex);
+  } else {
+    ESP_LOGE(TAG, "Failed to take g_user_input_mutex in get_user_input_data");
+    // Optionally, initialize data to default values if mutex cannot be taken
+    memset(data, 0, sizeof(user_input_data));
   }
 }
 
@@ -315,16 +433,15 @@ void wifi_initialization_func() {
   }
 
   // Create mutexes
-  g_client_sock_mutex = xSemaphoreCreateMutex();
   g_system_output_mutex = xSemaphoreCreateMutex();
-  g_connection_mutex = xSemaphoreCreateMutex();
+  g_user_input_mutex = xSemaphoreCreateMutex();
 
-  if (g_client_sock_mutex == NULL || g_system_output_mutex == NULL ||
-      g_connection_mutex == NULL) {
+  if (g_system_output_mutex == NULL || g_user_input_mutex == NULL) {
     ESP_LOGE(TAG, "Failed to create mutexes");
     return;
   }
 
+  // Initialize WiFi (assuming you have an init_wifi function)
   esp_err_t wifi_result = init_wifi(&esp_net_conf);
   if (wifi_result != ESP_OK) {
     ESP_LOGE(TAG, "Exiting: Wi-Fi connection failed.");
@@ -332,13 +449,18 @@ void wifi_initialization_func() {
     return;
   }
 
-  // Create tasks with appropriate stack sizes and priorities
-  xTaskCreate(tcp_server_task, "tcp_server", 4096, &esp_net_conf, 5, NULL);
-  xTaskCreate(tcp_sender_task, "tcp_sender", 3072, NULL, 4, NULL);
+  // Start the web server instead of TCP tasks
+  httpd_handle_t server = start_webserver();
+  if (server == NULL) {
+    ESP_LOGE(TAG, "Failed to start web server");
+    return;
+  }
 
+  ESP_LOGI(
+      TAG,
+      "Web server started successfully. Connect to: http://[ESP32_IP_ADDRESS]");
   return;
 }
-
 ///////////////////////////
 ////// switch /////////////
 ///////////////////////////
@@ -527,8 +649,8 @@ static encoder_t encoder_2 = {
     .current_reading = 0,
     .accumulated_steps = 0,
     .is_inverted = 1,
-    .gear_ratio = 1,
-    .test_offset = 706,
+    .gear_ratio = 0.96,
+    .test_offset = 0,
     .is_calibrated = false,
     .switch_n = &switch_1,
     .angle_degrees = 0,
@@ -553,7 +675,7 @@ static encoder_t encoder_3 = {
     .accumulated_steps = 0,
     .is_inverted = 1,
     .gear_ratio = 1,
-    .test_offset = 706,
+    .test_offset = 0,
     .is_calibrated = false,
     /* .switch_n = &switch_1, */
     .angle_degrees = 0,
@@ -704,7 +826,7 @@ motor_mcpwm_vars mcpwm_vars_b = {
 };
 motor_pwm_vars_t pwm_vars_x = {
     .step_count = 0,
-    .max_freq = 1200,
+    .max_freq = 2500,
     .min_freq = 0,
     .max_accel = 3000,
     .current_freq_hz = 0,
@@ -714,9 +836,9 @@ motor_pwm_vars_t pwm_vars_x = {
 
 motor_pwm_vars_t pwm_vars_y = {
     .step_count = 0,
-    .max_freq = 1000,
+    .max_freq = 1000.0,
     .min_freq = 0,
-    .max_accel = 3000,
+    .max_accel = 3000.0,
     .current_freq_hz = 0,
     .target_freq_hz = 0,
     .dir_is_reversed = true,
@@ -938,16 +1060,14 @@ void calibration_initialization_task() {
   motor_a.control_vars->encoder_target_pos = 0;
   motor_b.control_vars->encoder_target_pos = 0;
 
-  motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq);
+  motor_set_target_frequency(&motor_x, motor_x.pwm_vars->max_freq / 2);
   while (!motor_x.control_vars->ref_switch->is_pressed) {
-    /* ESP_LOGI("calibration_initialization_task", "calibrating motor_x"); */
+    ESP_LOGI("calibration_initialization_task", "calibrating motor_x");
     vTaskDelay(20);
   }
   motor_set_target_frequency(&motor_x, 0);
-  /* motor_move_steps(&motor_x, 6400 * 10 / 6 * 5, motor_x.pwm_vars->max_freq);
-   */
-  motor_set_current_position(&motor_x, 0); // Start at position 0
-  motor_move_to_position(&motor_x, 6600, motor_x.pwm_vars->max_freq);
+  motor_set_current_position(&motor_x, 0);
+  motor_move_to_position(&motor_x, 6600 * 5, motor_x.pwm_vars->max_freq);
 
   motor_set_target_frequency(&motor_y, motor_y.pwm_vars->max_freq / 4);
   motor_y.pwm_vars->target_freq_hz = motor_y.pwm_vars->max_freq / 4;
@@ -972,23 +1092,6 @@ void calibration_initialization_task() {
   encoder_zero_position(motor_z.control_vars->ref_encoder);
   motor_z.control_vars->encoder_target_pos = 0;
   motor_y.control_vars->encoder_target_pos = 0;
-
-  /* motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq); */
-  /* while (!motor_y.control_vars->ref_switch->is_pressed) { */
-  /*   ESP_LOGI("calibration_initialization_task", "calibrating motor_z"); */
-  /*   vTaskDelay(20); */
-  /* } */
-  /* motor_set_target_frequency(&motor_z, 0); */
-  /* encoder_zero_position(motor_z.control_vars->ref_encoder); */
-  /* motor_z.control_vars->encoder_target_pos = 0; */
-
-  /* // go to middle */
-  /* motor_set_target_frequency(&motor_z, motor_z.pwm_vars->max_freq / 4); */
-  /* while (!motor_z.control_vars->ref_switch->is_pressed) { */
-  /*   ESP_LOGI("calibration_initialization_task", "calibrating motor_z"); */
-  /*   vTaskDelay(20); */
-  /* } */
-  // set new value
   ESP_LOGW("calibration", "\n\n\nAll calibrations done!\n\n\n");
 
   return;
@@ -1108,35 +1211,30 @@ void hx711_initialization_func() {
   return;
 }
 
-void loop_scara_readings() {
-  while (1) {
-    ESP_LOGI("switch_0", "is pressed: %d", switch_0.is_pressed);
-    ESP_LOGI("switch_1", "is pressed: %d", switch_1.is_pressed);
+typedef struct {
+  float d1;
+  float theta2_elbow_down;
+  float theta2_elbow_up;
+  float theta3_elbow_down;
+  float theta3_elbow_up;
+  float w_elbow_down;
+  float w_elbow_up;
+} inv_kin_results;
 
-    ESP_LOGI(encoder_0.label, "value deg: %f", encoder_0.angle_degrees);
-    ESP_LOGI(encoder_1.label, "value deg: %f", encoder_1.angle_degrees);
-    ESP_LOGI(encoder_2.label, "value deg: %f", encoder_2.angle_degrees);
-    ESP_LOGI(encoder_3.label, "value deg: %f", encoder_3.angle_degrees);
+inv_kin_results inv_kin_results_t;
+user_input_data current_input;
 
-    ESP_LOGI(encoder_0.label, "steps: %d", encoder_0.accumulated_steps);
-    ESP_LOGI(encoder_1.label, "steps: %d", encoder_1.accumulated_steps);
-    ESP_LOGI(encoder_2.label, "steps: %d", encoder_2.accumulated_steps);
-    ESP_LOGI(encoder_3.label, "steps: %d", encoder_3.accumulated_steps);
-
-    ESP_LOGI("", "");
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-  }
-  return;
-}
+void calculate_inverse_kinematics(float x, float y, float z, float w,
+                                  inv_kin_results *results);
 
 void update_target_positions() {
-  vTaskDelay(pdMS_TO_TICKS(5000));
-
   while (1) {
     // direct kinematics is active
     if (client_input_data.dir_kinematics_on &&
         !client_input_data.inv_kinematics_on) {
-      motor_move_to_position(&motor_x, 6600 * client_input_data.d1,
+
+      motor_move_to_position(&motor_x,
+                             6600 * (3700 - client_input_data.d1) / 100,
                              motor_x.pwm_vars->max_freq);
 
       motor_y.control_vars->encoder_target_pos =
@@ -1151,7 +1249,7 @@ void update_target_positions() {
           motor_y.control_vars->encoder_target_pos;
 
       motor_a.control_vars->encoder_target_pos =
-          client_input_data.theta4 *
+          -1 * client_input_data.theta4 *
           motor_a.control_vars->ref_encoder->encoder_resolution / 360 *
           motor_a.control_vars->ref_encoder->gear_ratio;
 
@@ -1159,11 +1257,59 @@ void update_target_positions() {
           client_input_data.theta5 *
           motor_b.control_vars->ref_encoder->encoder_resolution / 360 *
           motor_b.control_vars->ref_encoder->gear_ratio;
+
       vTaskDelay(1000 / portTICK_PERIOD_MS);
 
       // inverse kinematics is on
     } else if (client_input_data.inv_kinematics_on &&
                !client_input_data.dir_kinematics_on) {
+      calculate_inverse_kinematics(client_input_data.x, client_input_data.y,
+                                   client_input_data.z, client_input_data.w,
+                                   &inv_kin_results_t);
+
+      /* motor_move_to_position(&motor_x, */
+      /*                        6600 * (3700 - inv_kin_results_t.d1) / 100, */
+      /*                        motor_x.pwm_vars->max_freq); */
+
+      if (client_input_data.elbow_up) {
+        motor_y.control_vars->encoder_target_pos =
+            inv_kin_results_t.theta2_elbow_up * 180 / M_PI * -1 *
+            motor_y.control_vars->ref_encoder->encoder_resolution / 360 *
+            motor_y.control_vars->ref_encoder->gear_ratio;
+
+        motor_z.control_vars->encoder_target_pos =
+            inv_kin_results_t.theta3_elbow_up * 180 / M_PI * -1 *
+                motor_z.control_vars->ref_encoder->encoder_resolution / 360 *
+                motor_z.control_vars->ref_encoder->gear_ratio -
+            motor_y.control_vars->encoder_target_pos;
+
+        motor_a.control_vars->encoder_target_pos =
+            -1 * inv_kin_results_t.w_elbow_up * 180 / M_PI *
+            motor_a.control_vars->ref_encoder->encoder_resolution / 360 *
+            motor_a.control_vars->ref_encoder->gear_ratio;
+
+      } else if (!client_input_data.elbow_up) {
+        motor_y.control_vars->encoder_target_pos =
+            inv_kin_results_t.theta2_elbow_down * 180 / M_PI * -1 *
+            motor_y.control_vars->ref_encoder->encoder_resolution / 360 *
+            motor_y.control_vars->ref_encoder->gear_ratio;
+
+        motor_z.control_vars->encoder_target_pos =
+            inv_kin_results_t.theta3_elbow_down * 180 / M_PI * -1 *
+                motor_z.control_vars->ref_encoder->encoder_resolution / 360 *
+                motor_z.control_vars->ref_encoder->gear_ratio -
+            motor_y.control_vars->encoder_target_pos;
+
+        motor_a.control_vars->encoder_target_pos =
+            -1 * inv_kin_results_t.w_elbow_down * 180 / M_PI *
+            motor_a.control_vars->ref_encoder->encoder_resolution / 360 *
+            motor_a.control_vars->ref_encoder->gear_ratio;
+      }
+
+      motor_b.control_vars->encoder_target_pos =
+          client_input_data.cp *
+          motor_b.control_vars->ref_encoder->encoder_resolution / 360 *
+          motor_b.control_vars->ref_encoder->gear_ratio;
 
       vTaskDelay(1000 / portTICK_PERIOD_MS);
 
@@ -1175,14 +1321,14 @@ void update_target_positions() {
 }
 
 // dimenstions in meters
-#define A1_DIM 9.8 / 2 / 100
-#define A2_DIM 10 / 100
+#define A1_DIM 4.9 / 100
+#define A2_DIM 10.0 / 100
 #define A3_DIM 10.25 / 100
+#define D3_VAL 5.9 / 100
+#define D4_VAL 15.0 / 100
 
 #define D1_MIN_VAL 0
-#define D1_MAX_VAL 45 / 100
-#define D3_VAL 5.9 / 100
-#define D4_VAL 15 / 100
+#define D1_MAX_VAL 45.0 / 100
 
 // angles in degrees
 #define THETA2_MIN_VAL -100
@@ -1194,49 +1340,120 @@ void update_target_positions() {
 
 /* #define THETA3_4_SUM_MAX_VAL */
 
-void calculate_direct_kinematics(system_output_data *data) {
-  data->x = (float)A3_DIM * cosf(data->theta2 + data->theta3) +
-            (float)A2_DIM * cosf(data->theta2) + A1_DIM;
-
-  data->y = (float)A3_DIM * (sinf(data->theta2 + data->theta3)) +
-            (float)A2_DIM * sinf(data->theta2);
-
-  data->z = data->d1 - (float)D3_VAL + (float)D4_VAL;
+void calculate_direct_kinematics(float d1, float theta2, float theta3,
+                                 float theta4, system_output_data *data) {
+  data->x = A1_DIM + A2_DIM * cos(theta2 * M_PI / 180) +
+            A3_DIM * cos((theta2 + theta3) * M_PI / 180);
+  data->y = A2_DIM * sin(theta2 * M_PI / 180) +
+            A3_DIM * sin((theta2 + theta3) * M_PI / 180);
+  data->z = d1 - D3_VAL + D4_VAL;
 }
 
-void update_monitoring_data(system_output_data *system_output_data_t) {
-  system_output_data_t->horizontal_load = hx711_0.raw_read;
-  system_output_data_t->vertical_load = hx711_1.raw_read;
+// Helper function to check if a point is reachable
+bool is_point_reachable(float x, float y, float z) {
+  float r2 = sqrt(pow(x - A1_DIM, 2) + pow(y, 2));
+  float max_reach = A2_DIM + A3_DIM;
+  float min_reach = fabs(A2_DIM - A3_DIM);
 
-  system_output_data_t->encoder0 = encoder_0.accumulated_steps + rand();
-  system_output_data_t->encoder1 = encoder_1.accumulated_steps + rand();
-  system_output_data_t->encoder2 = encoder_2.accumulated_steps + rand();
-  system_output_data_t->encoder3 = encoder_3.accumulated_steps + rand();
+  bool result = r2 <= max_reach && r2 >= min_reach;
+  if (!result)
+    ESP_LOGW("is_point_reachable", "point (%.2f,%.2f,%.2f) is not reachable.",
+             x, y, z);
+  return (result);
+}
 
-  system_output_data_t->switch0 = switch_0.is_pressed;
-  system_output_data_t->switch1 = switch_1.is_pressed;
+void calculate_inverse_kinematics(float x, float y, float z, float w,
+                                  inv_kin_results *results) {
 
-  system_output_data_t->d1 = 0;
+  // Calculate r2 - distance from second joint to target in XY plane
+  float r2 = sqrt(pow(x - A1_DIM, 2) + pow(y, 2));
 
-  system_output_data_t->theta2 = -1 * encoder_get_angle_degrees(&encoder_0);
+  // Check if target is reachable
+  float max_reach = A2_DIM + A3_DIM;
+  float min_reach = fabs(A2_DIM - A3_DIM);
 
-  system_output_data_t->theta3 =
-      encoder_get_angle_degrees(&encoder_1) - system_output_data_t->theta2;
+  if (r2 > max_reach || r2 < min_reach) {
+    ESP_LOGE("calculate_inverse_kinematics",
+             "Target unreachable! r2=%.2f, min=%.2f, max=%.2f", r2, min_reach,
+             max_reach);
+    return;
+  }
 
-  system_output_data_t->theta4 = encoder_get_angle_degrees(&encoder_2);
+  // Calculate the argument for acos - this is the cosine of the angle between
+  // links
+  float cos_beta2 =
+      (pow(r2, 2) - pow(A2_DIM, 2) - pow(A3_DIM, 2)) / (-2 * A2_DIM * A3_DIM);
 
-  system_output_data_t->theta5 = encoder_get_angle_degrees(&encoder_3);
+  // Clamp the value to [-1, 1] to handle numerical precision issues
+  cos_beta2 = fmaxf(-1.0f, fminf(1.0f, cos_beta2));
+
+  float beta2 = acos(cos_beta2);
+
+  // Calculate theta3 (elbow angle)
+  results->theta3_elbow_up = M_PI - beta2;      // Elbow up configuration
+  results->theta3_elbow_down = -(M_PI - beta2); // Elbow down configuration
+
+  // Calculate beta3 (angle to target from first joint)
+  float beta3 = atan2(y, x - A1_DIM);
+
+  // Calculate phi (angle correction for link 2)
+  float cos_phi =
+      (pow(A2_DIM, 2) + pow(r2, 2) - pow(A3_DIM, 2)) / (2 * A2_DIM * r2);
+  cos_phi = fmaxf(-1.0f, fminf(1.0f, cos_phi)); // Clamp again
+  float phi = acos(cos_phi);
+
+  // Calculate theta2 (shoulder angle)
+  results->theta2_elbow_up = beta3 + phi;   // For elbow up
+  results->theta2_elbow_down = beta3 - phi; // For elbow down
+
+  // Set d1 (prismatic joint for Z-axis) (mm)
+  /* results->d1 = (-3700 - (z + D3_VAL - D4_VAL)); */
+  results->d1 = z;
+
+  results->w_elbow_up =
+      w * M_PI / 180 - results->theta2_elbow_up - results->theta3_elbow_down;
+
+  results->w_elbow_down =
+      w * M_PI / 180 - results->theta2_elbow_down - results->theta3_elbow_up;
+  return;
+}
+
+void update_monitoring_data(system_output_data *data) {
+  data->horizontal_load = hx711_0.raw_read;
+  data->vertical_load = hx711_1.raw_read;
+
+  /* data->horizontal_load = 2; */
+  /* data->vertical_load = 97; */
+  data->encoder0 = encoder_0.accumulated_steps;
+  data->encoder1 = encoder_1.accumulated_steps;
+  data->encoder2 = encoder_2.accumulated_steps;
+  data->encoder3 = encoder_3.accumulated_steps;
+
+  data->switch0 = switch_0.is_pressed;
+  data->switch1 = switch_1.is_pressed;
+
+  // variable parameters
+  // 45 - 8 -> Initial pos
+  // d1 in (mm)
+
+  data->d1 = 3700 - (motor_x.pwm_vars->current_position / 100.0) - 500;
+  data->d1 = data->d1 / 10;
+
+  // BUG: broken
+  data->theta2 = -1 * encoder_get_angle_degrees(&encoder_0);
+  data->theta3 = encoder_get_angle_degrees(&encoder_1) - data->theta2;
+  data->theta4 = encoder_get_angle_degrees(&encoder_2);
+  data->theta5 = -1 * encoder_get_angle_degrees(&encoder_3);
 
   // update x, y, z with direct kinematics
-  calculate_direct_kinematics(system_output_data_t);
+  calculate_direct_kinematics(data->d1, data->theta2, data->theta3,
+                              data->theta4, data);
 
-  system_output_data_t->w =
-      system_output_data_t->theta5; // TODO: maybe change this
-
-  update_system_output_data(system_output_data_t);
+  /* data->w = data->theta5; // TODO: maybe change this */
+  update_system_output_data(data);
 }
 
-void read_system_output_data(const system_output_data *data) {
+void print_system_output_data(system_output_data *data) {
   ESP_LOGI(TAG, "horizontal_load: %.2f", data->horizontal_load);
   ESP_LOGI(TAG, "vertical_load: %.2f", data->vertical_load);
   ESP_LOGI(TAG, "encoder0: %.2f", data->encoder0);
@@ -1254,23 +1471,87 @@ void read_system_output_data(const system_output_data *data) {
   ESP_LOGI(TAG, "theta3: %.2f", data->theta3);
   ESP_LOGI(TAG, "theta4: %.2f", data->theta4);
   ESP_LOGI(TAG, "theta5: %.2f", data->theta5);
-  ESP_LOGI("", "");
+  ESP_LOGI(TAG, "d1: %.2f", client_input_data.d1);
+  ESP_LOGI(TAG, "theta2: %.2f", client_input_data.theta2);
+  ESP_LOGI(TAG, "theta3: %.2f", client_input_data.theta3);
+  ESP_LOGI(TAG, "theta4: %.2f", client_input_data.theta4);
+  ESP_LOGI(TAG, "theta5: %.2f", client_input_data.theta5);
+  ESP_LOGI(TAG, "inv_kinematics_on: %.2f", client_input_data.inv_kinematics_on);
+  ESP_LOGI(TAG, "x: %.2f", client_input_data.x);
+  ESP_LOGI(TAG, "y: %2f", client_input_data.y);
+  ESP_LOGI(TAG, "z: %2f", client_input_data.z);
+  ESP_LOGI(TAG, "w: %2f", client_input_data.w);
+  ESP_LOGI(TAG, "pick_and_place_on: %2f", client_input_data.pick_and_place_on);
+  ESP_LOGI(TAG, "xip: %2f", client_input_data.xip);
+  ESP_LOGI(TAG, "yip: %2f", client_input_data.yip);
+  ESP_LOGI(TAG, "zip: %2f", client_input_data.zip);
+  ESP_LOGI(TAG, "wip: %2f", client_input_data.wip);
+  ESP_LOGI(TAG, "xfp: %2f", client_input_data.xfp);
+  ESP_LOGI(TAG, "yfp: %2f", client_input_data.yfp);
+  ESP_LOGI(TAG, "zfp: %2f", client_input_data.zfp);
+  ESP_LOGI(TAG, "wfp: %2f", client_input_data.wfp);
+  ESP_LOGI(TAG, "hp: %2f", client_input_data.hp);
+  ESP_LOGI(TAG, "cp: %2f", client_input_data.cp);
+}
+void print_tests() {
+  /* ESP_LOGI( */
+  /*     TAG, "%.5f, %.5f", */
+  /*     motor_y.control_vars->encoder_target_pos - encoder_0.accumulated_steps,
+   */
+  /*     motor_y.control_vars->encoder_target_pos); */
+  /* ESP_LOGI(TAG, "%.5f, %.5f", */
+  /*          -1 * (motor_y.control_vars->encoder_target_pos - */
+  /*                encoder_0.accumulated_steps) + */
+  /*              motor_y.control_vars->encoder_target_pos, */
+  /*          motor_y.control_vars->encoder_target_pos); */
+  ESP_LOGI(TAG, "%.5f, %.5f, %.5f, %.5f, %.5f, %.5f",
+           -1 * (motor_y.control_vars->encoder_target_pos -
+                 encoder_0.accumulated_steps) +
+               motor_y.control_vars->encoder_target_pos,
+           motor_y.control_vars->encoder_target_pos,
+
+           -1 * (motor_z.control_vars->encoder_target_pos -
+                 encoder_1.accumulated_steps) +
+               motor_z.control_vars->encoder_target_pos,
+           motor_z.control_vars->encoder_target_pos,
+
+           -1 * (motor_a.control_vars->encoder_target_pos -
+                 encoder_2.accumulated_steps) +
+               motor_a.control_vars->encoder_target_pos,
+           motor_a.control_vars->encoder_target_pos,
+
+           -1 * (motor_b.control_vars->encoder_target_pos -
+                 encoder_3.accumulated_steps) +
+               motor_b.control_vars->encoder_target_pos,
+           motor_b.control_vars->encoder_target_pos);
 }
 
+// TODO: make this the only loop for readings
 void loop_scara_readings_2() {
   while (1) {
-    update_monitoring_data(&system_output_data_values);
-    read_system_output_data(&system_output_data_values);
+    update_monitoring_data(&system_new_output_data_values);
+    get_user_input_data(&client_input_data); // Get web interface input
+
+    /* print_system_output_data(&system_output_data_values); */
     vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
+}
+
+void print_tests_task() {
+  while (1) {
+    print_tests();
+    vTaskDelay(75 / portTICK_PERIOD_MS);
   }
 }
 
 void init_scara() {
   // components
   wifi_initialization_func();
-  /* switch_initialization_task(); */
-  /* encoder_initialization_task(); */
-  /* motor_initialization_task(); */
+  switch_initialization_task();
+  encoder_initialization_task();
+  motor_initialization_task();
+
+  // BUG: broken :C
   /* hx711_initialization_func(); */
 
   // test functions
@@ -1278,9 +1559,10 @@ void init_scara() {
   /* xTaskCreate(loop_scara_readings, "testreadings", 4096, NULL, 5, NULL); */
 
   xTaskCreate(loop_scara_readings_2, "testreadings", 4096, NULL, 5, NULL);
-
-  /* calibration_initialization_task(); */
   xTaskCreate(update_target_positions, "update target positions", 4096, NULL, 5,
               NULL);
+  calibration_initialization_task();
+
+  /* xTaskCreate(print_tests_task, "print tests", 4096, NULL, 5, NULL); */
   ESP_LOGI(TAG, "init_scara completed");
 }

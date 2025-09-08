@@ -799,23 +799,22 @@ esp_err_t motor_move_to_position(motor_t *motor, int target_position,
   // Calculate steps needed to reach target position
   int current_position =
       motor->pwm_vars
-          ->current_position; // You need to add this to your motor struct
+          ->current_position; 
   int steps_to_move = target_position - current_position;
 
-  ESP_LOGI(TAG, "Motor %d: Moving from position %d to %d (%d steps)", motor->id,
-           current_position, target_position, steps_to_move);
+  /* ESP_LOGI(TAG, "Motor %d: Moving from position %d to %d (%d steps)", motor->id, */
+  /*          current_position, target_position, steps_to_move); */
 
   // If we're already at the target position, no need to move
   if (steps_to_move == 0) {
-    ESP_LOGI(TAG, "Motor %d already at target position %d", motor->id,
-             target_position);
+    /* ESP_LOGI(TAG, "Motor %d already at target position %d", motor->id, */
+    /*          target_position); */
     return ESP_OK;
   }
 
   // Update target position before moving
   motor->pwm_vars->target_position = target_position;
 
-  // Use the existing motor_move_steps function
   esp_err_t result = motor_move_steps(motor, steps_to_move, frequency);
 
   if (result == ESP_OK) {
